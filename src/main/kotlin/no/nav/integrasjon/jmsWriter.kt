@@ -18,16 +18,13 @@ fun jmsWriterAsync(
             s.createProducer(s.createQueue(queueName)).use { p ->
 
                 while (isActive) {
-
-                    // get the transformed kafka event data and write to jms
-                    p.send(s.createTextMessage(eventTrfd.receive().value))
-
-                    // all ok, commit to kafka
-                    kCommit.send(DoCommit)
+                    // receive transformed event, send to jms, and tell kafka listener to commit
+                    eventTrfd.receive().also { e ->
+                        p.send(s.createTextMessage(e.value))
+                        kCommit.send(DoCommit)
+                    }
                 }
             }
         }
     }
-
-    //session.createBrowser(q).enumeration.toList().size
 }

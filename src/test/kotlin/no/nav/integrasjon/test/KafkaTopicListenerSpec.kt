@@ -19,6 +19,7 @@ import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
 import org.jetbrains.spek.api.dsl.xcontext
 import java.util.*
+import javax.jms.ConnectionFactory
 
 object KafkaTopicListenerSpec : Spek({
 
@@ -55,7 +56,7 @@ object KafkaTopicListenerSpec : Spek({
     }
 
     // Setting up embedded Apache ActiveMQ and queue name to use
-    val connectionFactory = ActiveMQConnectionFactory("vm://localhost?broker.persistent=false")
+    val connectionFactory: ConnectionFactory = ActiveMQConnectionFactory("vm://localhost?broker.persistent=false")
     val queueName = "kafkaEvents"
 
     describe("Kafka topic listener to transform to jms backend tests") {
@@ -230,11 +231,14 @@ object KafkaTopicListenerSpec : Spek({
                     while (embMQ.qSize < data.size) {
                         delay(waitPatience)
                     }
+                    delay(1_000)
 
                     producer.cancelAndJoin()
                     consumer.cancelAndJoin()
                     transformer.cancelAndJoin()
                     jmsWriter.cancelAndJoin()
+
+                    println("FINISHED!!")
                 }
 
                 embMQ.qSize shouldEqualTo data.size
