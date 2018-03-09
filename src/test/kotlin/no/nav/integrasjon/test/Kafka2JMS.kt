@@ -21,7 +21,7 @@ import org.jetbrains.spek.api.dsl.xcontext
 import java.util.*
 import javax.jms.ConnectionFactory
 
-object KafkaTopicListenerSpec : Spek({
+object Kafka2JMS : Spek({
 
     val topic = "test"
     val kEnv = KafkaEnvironment(topics = listOf(topic))
@@ -64,12 +64,13 @@ object KafkaTopicListenerSpec : Spek({
         val data = (1..10).map {"data-$it"}
         val waitPatience = 100L
 
-        xcontext("basic send ${data.size} data elements & receive them") {
+        context("basic send ${data.size} data elements & receive them") {
 
             beforeGroup { kEnv.start() }
 
             val kafkaEvents = Channel<String>()
             val kListenerCommit = Channel<CommitAction>()
+            val mngmtStatus = Channel<ManagementStatus>()
 
             it("should receive ${data.size} data elements") {
 
@@ -82,9 +83,10 @@ object KafkaTopicListenerSpec : Spek({
                         topic,
                         waitPatience,
                         kafkaEvents,
-                        kListenerCommit)
+                        kListenerCommit,
+                        mngmtStatus)
 
-                var events = mutableListOf<String>()
+                val events = mutableListOf<String>()
 
                 runBlocking {
 
@@ -111,10 +113,11 @@ object KafkaTopicListenerSpec : Spek({
                         topic,
                         waitPatience,
                         kafkaEvents,
-                        kListenerCommit)
+                        kListenerCommit,
+                        mngmtStatus)
 
                 var imPatience = 0
-                var events = mutableListOf<String>()
+                val events = mutableListOf<String>()
 
                 runBlocking {
 
@@ -139,18 +142,19 @@ object KafkaTopicListenerSpec : Spek({
             }
         }
 
-        xcontext("basic send ${data.size} data elements, receive and transform them") {
+        context("basic send ${data.size} data elements, receive and transform them") {
 
             beforeGroup { kEnv.start() }
 
             val kafkaEvents = Channel<String>()
             val kListenerCommit = Channel<CommitAction>()
             val trfEvents = Channel<EventTransformed>()
+            val mngmtStatus = Channel<ManagementStatus>()
 
             it("should receive ${data.size} data elements, transformed to uppercase") {
 
                 // kick of transformer
-                val transformer = eventTransformerAsync(kafkaEvents,trfEvents)
+                val transformer = eventTransformerAsync(kafkaEvents,trfEvents,mngmtStatus)
 
                 // kick of asynchronous task for sending data to kafka
                 val producer = kafkaTopicWriterAsync(kProdProps, topic, "key", data)
@@ -161,9 +165,10 @@ object KafkaTopicListenerSpec : Spek({
                         topic,
                         waitPatience,
                         kafkaEvents,
-                        kListenerCommit)
+                        kListenerCommit,
+                        mngmtStatus)
 
-                var events = mutableListOf<String>()
+                val events = mutableListOf<String>()
 
                 runBlocking {
 
@@ -193,11 +198,14 @@ object KafkaTopicListenerSpec : Spek({
 
         context("basic send ${data.size} data elements, receive, transform and to jms") {
 
-            beforeGroup { kEnv.start() }
+            beforeGroup {
+                kEnv.start()
+            }
 
             val kafkaEvents = Channel<String>()
             val kListenerCommit = Channel<CommitAction>()
             val trfEvents = Channel<EventTransformed>()
+            val mngmtStatus = Channel<ManagementStatus>()
 
             it("should receive ${data.size} data elements, transformed to uppercase") {
 
@@ -206,13 +214,11 @@ object KafkaTopicListenerSpec : Spek({
                         connectionFactory,
                         queueName,
                         trfEvents,
-                        kListenerCommit)
+                        kListenerCommit,
+                        mngmtStatus)
 
                 // kick of transformer
-                val transformer = eventTransformerAsync(kafkaEvents,trfEvents)
-
-                // kick of asynchronous task for sending data to kafka
-                val producer = kafkaTopicWriterAsync(kProdProps, topic, "key", data)
+                val transformer = eventTransformerAsync(kafkaEvents,trfEvents,mngmtStatus)
 
                 // kick of asynchronous task for receiving data from kafka
                 val consumer = kafkaTopicListenerAsync<String, String>(
@@ -220,18 +226,22 @@ object KafkaTopicListenerSpec : Spek({
                         topic,
                         waitPatience,
                         kafkaEvents,
-                        kListenerCommit)
+                        kListenerCommit,
+                        mngmtStatus)
 
-                // help object to evaluate finish line
-                val embMQ = EmbeddedActiveMQ(connectionFactory, queueName)
+                // kick of asynchronous task for sending data to kafka
+                val producer = kafkaTopicWriterAsync(kProdProps, topic, "key", data)
 
                 runBlocking {
 
-                    // check elements on queue
-                    while (embMQ.qSize < data.size) {
-                        delay(waitPatience)
+                    // helper object to evaluate elements in jms queue
+                    val qSize = EmbeddedActiveMQ(connectionFactory, queueName).use {
+                        while (it.qSize < data.size && mngmtStatus.isEmpty) {
+                            delay(waitPatience)
+                        }
+
+                        it.qSize
                     }
-                    delay(1_000)
 
                     producer.cancelAndJoin()
                     consumer.cancelAndJoin()
@@ -239,9 +249,8 @@ object KafkaTopicListenerSpec : Spek({
                     jmsWriter.cancelAndJoin()
 
                     println("FINISHED!!")
-                }
-
-                embMQ.qSize shouldEqualTo data.size
+                    qSize
+                } shouldEqualTo data.size
             }
 
             afterGroup {
@@ -249,6 +258,7 @@ object KafkaTopicListenerSpec : Spek({
                 kafkaEvents.close()
                 kListenerCommit.close()
                 trfEvents.close()
+                mngmtStatus.close()
             }
         }
     }

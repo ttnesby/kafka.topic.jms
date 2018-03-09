@@ -8,19 +8,28 @@ data class EventTransformed(val value: String)
 
 fun <V>eventTransformerAsync(
         eventIn: ReceiveChannel<V>,
-        pipeline: SendChannel<EventTransformed>) = async {
+        pipeline: SendChannel<EventTransformed>,
+        manager: SendChannel<ManagementStatus>) = async {
 
-    var noException = true
+    var allGood = true
 
-    while (isActive && noException) {
+    try {
+        while (isActive && allGood) {
 
-        eventIn.receive().let {
-            when(it) {
-                is String -> {
-                    pipeline.send(EventTransformed(it.toUpperCase()))
+            eventIn.receive().also {
+                when (it) {
+                    is String -> {
+                        pipeline.send(EventTransformed(it.toUpperCase()))
+                        println("TRANSFORMED!")
+                    }
+                    else -> {
+                    }
                 }
-                else -> {}
             }
         }
     }
+    catch (e: Exception) {}
+
+    // notify manager if this job is still active
+    if (isActive) manager.send(Problem)
 }
