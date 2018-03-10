@@ -17,6 +17,7 @@ import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.context
 import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
+import org.jetbrains.spek.api.dsl.xcontext
 import java.util.*
 import javax.jms.ConnectionFactory
 
@@ -62,10 +63,10 @@ object Kafka2JMS : Spek({
 
     describe("Kafka topic listener to transform to jms backend tests") {
 
-        val data = (1..500).map {"data-$it"}
+        val data = (1..10).map {"data-$it"}
         val waitPatience = 100L
 
-        context("send ${data.size} data elements to kafka and receive them") {
+        xcontext("send ${data.size} data elements to kafka and receive them") {
 
             beforeGroup {
                 kEnv.start()
@@ -75,7 +76,7 @@ object Kafka2JMS : Spek({
 
                 val events = mutableListOf<String>()
 
-                Channels<String,String>().use { c ->
+                Channels<String,String>(1).use { c ->
 
                     runBlocking {
 
@@ -111,7 +112,7 @@ object Kafka2JMS : Spek({
 
                 val events = mutableListOf<String>()
 
-                Channels<String,String>().use { c ->
+                Channels<String,String>(1).use { c ->
 
                     runBlocking {
 
@@ -148,7 +149,7 @@ object Kafka2JMS : Spek({
             }
         }
 
-        context("send ${data.size} data elements, receive and transform them") {
+        xcontext("send ${data.size} data elements, receive and transform them") {
 
             beforeGroup {
                 kEnv.start()
@@ -158,7 +159,7 @@ object Kafka2JMS : Spek({
 
                 val transformed = mutableListOf<String>()
 
-                Channels<String,String>().use { c ->
+                Channels<String,String>(2).use { c ->
 
                     runBlocking {
 
@@ -237,7 +238,6 @@ object Kafka2JMS : Spek({
                     producer.cancelAndJoin()
                     manager.cancelAndJoin()
 
-                    log.info("Finished")
                     qSize
                 } shouldEqualTo data.size
             }

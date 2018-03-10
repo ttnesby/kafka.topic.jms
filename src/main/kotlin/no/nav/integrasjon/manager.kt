@@ -10,11 +10,11 @@ sealed class Status
 object Problem: Status()
 object Ready: Status()
 
-class Channels<V,T>: AutoCloseable {
+class Channels<V,T>(noOfCoroutines: Int): AutoCloseable {
 
     val transformedEvents = Channel<T>()
     val commitAction = Channel<CommitAction>()
-    val status = Channel<Status>()
+    val status = Channel<Status>(noOfCoroutines)
     val kafkaEvents = Channel<V>()
 
     override fun close() {
@@ -33,69 +33,62 @@ fun <K,V,T>managePipelineAsync(
         queueName: String,
         toText: (T) -> String) = async {
 
-    val log = KotlinLogging.logger {  }
+    val log = KotlinLogging.logger { }
+    val c = Channels<V, T>(3)
+    val r = mutableListOf<Job>()
 
-    Channels<V,T>().use { c ->
+    // kick off coroutines in reverse order
 
-        // kick off coroutines in reverse order
+    r.add(jmsWriterAsync(
+            connectionFactory,
+            queueName,
+            c.transformedEvents,
+            toText,
+            c.commitAction,
+            c.status))
 
-        val jmsWriter = jmsWriterAsync(
-                connectionFactory,
-                queueName,
-                c.transformedEvents,
-                toText,
-                c.commitAction,
-                c.status)
+    if (c.status.receive() == Problem) {
+        c.close()
+        return@async
+    }
 
-        if (c.status.receive() == Problem) return@async
+    log.debug { "jmsWriter up and running" }
 
-        log.debug { "jmsWriter up and running" }
+    r.add(eventTransformerAsync(
+            c.kafkaEvents,
+            c.transformedEvents,
+            transform,
+            c.status))
 
-        val transformer = eventTransformerAsync(
-                c.kafkaEvents,
-                c.transformedEvents,
-                transform,
-                c.status)
+    if (c.status.receive() == Problem) {
+        r.filter { it.isActive }.forEach { it.cancelAndJoin() }
+        c.close()
+        return@async
+    }
+    log.debug { "eventTransformer up and running" }
 
-        if (c.status.receive() == Problem) {
-            jmsWriter.cancelAndJoin()
-            return@async
-        }
+    r.add(kafkaTopicListenerAsync<K, V>(
+            consumerProps,
+            topic,
+            kafkaEvents = c.kafkaEvents,
+            commitAction = c.commitAction,
+            status = c.status))
 
-        log.debug { "eventTransformer up and running" }
+    if (c.status.receive() == Problem) {
+        r.filter { it.isActive }.forEach { it.cancelAndJoin() }
+        c.close()
+        return@async
+    }
+    log.debug { "kafkaTopicListener up and running" }
 
-        val consumer = kafkaTopicListenerAsync<K, V>(
-                consumerProps,
-                topic,
-                kafkaEvents = c.kafkaEvents,
-                commitAction = c.commitAction,
-                status = c.status)
-
-        if (c.status.receive() == Problem) {
-            jmsWriter.cancelAndJoin()
-            transformer.cancelAndJoin()
-            return@async
-        }
-
-        log.debug { "kafkaTopicListener up and running" }
-        try {
-            while (isActive && (c.status.poll()?.let { it } != Problem)) {
-                delay(1_000)
-                log.info("managePipelineAsync in loop")
-            }
-        }
-        catch (e: CancellationException) {
-            log.error("CancellationException",e)
-        }
-        finally {
-            withContext(NonCancellable) {
-                consumer.cancelAndJoin()
-                transformer.cancelAndJoin()
-                jmsWriter.cancelAndJoin()
-
-                log.info("leaving managePipelineAsync")
-            }
-
+    try {
+        while (isActive && (c.status.receive().let { it } != Problem)) {}
+    }
+    finally {
+        withContext(NonCancellable) {
+            r.reversed().forEach { it.cancelAndJoin() }
+            c.close()
+            log.info("@end of async - leaving managePipelineAsync")
         }
     }
 }

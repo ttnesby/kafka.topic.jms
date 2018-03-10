@@ -1,5 +1,6 @@
 package no.nav.integrasjon
 
+import kotlinx.coroutines.experimental.CancellationException
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.channels.ClosedSendChannelException
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
@@ -40,39 +41,37 @@ fun <K,V>kafkaTopicListenerAsync(
                             log.debug {"FETCHED from kafka!" }
 
                             // send event further down the pipeline
-                            try {
-                                kafkaEvents.send(e.value())
 
-                                // wait for feedback from pipeline
-                                when (commitAction.receive()) {
-                                    DoCommit -> try {
-                                        c.commitSync()
-                                    }
-                                    catch (e: CommitFailedException) {
-                                        log.error(e.stackTrace.toString())
-                                        allGood = false
-                                    }
-                                    NoCommit -> {
-                                        // problems further down the pipeline
-                                        allGood = false
-                                    }
+                            kafkaEvents.send(e.value())
+
+                            // wait for feedback from pipeline
+                            when (commitAction.receive()) {
+                                DoCommit -> try {
+                                    c.commitSync()
                                 }
-                            }
-                            catch (e: ClosedSendChannelException) {
-                                log.error(e.stackTrace.toString())
-                                allGood = false
+                                catch (e: CommitFailedException) {
+                                    log.error("CommitFailedException", e)
+                                    allGood = false
+                                }
+                                NoCommit -> {
+                                    // problems further down the pipeline
+                                    allGood = false
+                                }
                             }
                         }
                     }
                 }
     }
     catch (e: Exception) {
-        log.error(e.stackTrace.toString())
+        when (e) {
+            is CancellationException -> {/* it's ok*/ }
+            else -> log.error("Exception", e)
+        }
     }
     // IllegalArgumentException, IllegalStateException, InvalidOffsetException, WakeupException
     // InterruptException, AuthenticationException, AuthorizationException, KafkaException
     // IllegalArgumentException, IllegalStateException
 
     // notify manager if this job is still active
-    if (isActive) status.send(Problem)
+    if (isActive && !status.isClosedForSend) status.send(Problem)
 }

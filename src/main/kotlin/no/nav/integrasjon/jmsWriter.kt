@@ -1,5 +1,6 @@
 package no.nav.integrasjon
 
+import kotlinx.coroutines.experimental.CancellationException
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.SendChannel
@@ -40,7 +41,7 @@ fun <T>jmsWriterAsync(
                         // InvalidDestinationException, JMSException
                         allGood = false
                         commitAction.send(NoCommit)
-                        log.error(e.stackTrace.toString())
+                        log.error("Exception", e)
                         log.error("SENT NoCommit!")
                     }
                 }
@@ -48,9 +49,12 @@ fun <T>jmsWriterAsync(
         }
     }
     catch (e: Exception) {
-        log.error(e.stackTrace.toString())
+        when(e) {
+            is CancellationException -> {/* it's ok*/}
+            else -> log.error("Exception", e)
+        }
     } // JMSSecurityException, JMSException, ClosedReceiveChannelException
 
     // notify manager if this job is still active
-    if (isActive) status.send(Problem)
+    if (isActive && !status.isClosedForSend) status.send(Problem)
 }
