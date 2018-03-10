@@ -3,14 +3,18 @@ package no.nav.integrasjon
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.SendChannel
+import mu.KotlinLogging
 import javax.jms.*
 
-fun jmsWriterAsync(
+fun <T>jmsWriterAsync(
         connFactory: ConnectionFactory,
         queueName: String,
-        data: ReceiveChannel<EventTransformed>,
-        pipeline: SendChannel<CommitAction>,
-        manager: SendChannel<ManagementStatus>) = async {
+        data: ReceiveChannel<T>,
+        toText: (T) -> String,
+        commitAction: SendChannel<CommitAction>,
+        status: SendChannel<Status>) = async {
+
+    val log = KotlinLogging.logger {  }
 
     try {
         connFactory.createConnection().use { c ->
@@ -19,31 +23,34 @@ fun jmsWriterAsync(
             val p = s.createProducer(s.createQueue(queueName))
 
             var allGood = true
+            status.send(Ready)
 
             // receive data, send to jms, and tell pipeline to commit
             while (isActive && allGood) {
 
                 data.receive().also { e ->
                     try {
-                        p.send(s.createTextMessage(e.value))
-                        println("SENT to jms!")
-                        pipeline.send(DoCommit)
-                        println("SENT DoCommit!")
+                        p.send(s.createTextMessage(toText(e)))
+                        log.debug {"SENT to jms!" }
+                        commitAction.send(DoCommit)
+                        log.debug {"SENT DoCommit!"}
                     }
                     catch (e: Exception) {
                         // MessageFormatException, UnsupportedOperationException
                         // InvalidDestinationException, JMSException
                         allGood = false
-                        pipeline.send(NoCommit)
-                        println(e.stackTrace.toString())
-                        println("SENT NoCommit!")
+                        commitAction.send(NoCommit)
+                        log.error(e.stackTrace.toString())
+                        log.error("SENT NoCommit!")
                     }
                 }
             }
         }
     }
-    catch (e: Exception) {} // JMSSecurityException, JMSException, ClosedReceiveChannelException
+    catch (e: Exception) {
+        log.error(e.stackTrace.toString())
+    } // JMSSecurityException, JMSException, ClosedReceiveChannelException
 
     // notify manager if this job is still active
-    if (isActive) manager.send(Problem)
+    if (isActive) status.send(Problem)
 }

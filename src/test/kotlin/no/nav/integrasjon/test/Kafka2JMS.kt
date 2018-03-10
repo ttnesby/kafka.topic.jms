@@ -1,9 +1,9 @@
 package no.nav.integrasjon.test
 
 import kotlinx.coroutines.experimental.cancelAndJoin
-import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
+import mu.KotlinLogging
 import no.nav.common.KafkaEnvironment
 import no.nav.integrasjon.*
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
@@ -17,11 +17,13 @@ import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.context
 import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
-import org.jetbrains.spek.api.dsl.xcontext
 import java.util.*
 import javax.jms.ConnectionFactory
 
+
 object Kafka2JMS : Spek({
+
+    val log = KotlinLogging.logger {  }
 
     val topic = "test"
     val kEnv = KafkaEnvironment(topics = listOf(topic))
@@ -55,81 +57,87 @@ object Kafka2JMS : Spek({
         set(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
     }
 
-    // Setting up embedded Apache ActiveMQ and queue name to use
     val connectionFactory: ConnectionFactory = ActiveMQConnectionFactory("vm://localhost?broker.persistent=false")
     val queueName = "kafkaEvents"
 
     describe("Kafka topic listener to transform to jms backend tests") {
 
-        val data = (1..10).map {"data-$it"}
+        val data = (1..500).map {"data-$it"}
         val waitPatience = 100L
 
-        context("basic send ${data.size} data elements & receive them") {
+        context("send ${data.size} data elements to kafka and receive them") {
 
-            beforeGroup { kEnv.start() }
-
-            val kafkaEvents = Channel<String>()
-            val kListenerCommit = Channel<CommitAction>()
-            val mngmtStatus = Channel<ManagementStatus>()
+            beforeGroup {
+                kEnv.start()
+            }
 
             it("should receive ${data.size} data elements") {
 
-                //kick of asynchronous task for sending data to kafka
-                val producer = kafkaTopicWriterAsync(kProdProps,topic,"key", data)
-
-                // kick of asynchronous task for receiving data from kafka
-                val consumer = kafkaTopicListenerAsync<String, String>(
-                        kConsProps,
-                        topic,
-                        waitPatience,
-                        kafkaEvents,
-                        kListenerCommit,
-                        mngmtStatus)
-
                 val events = mutableListOf<String>()
 
-                runBlocking {
+                Channels<String,String>().use { c ->
 
-                    while (events.size < data.size) {
-                        (kafkaEvents.poll())?.let {
-                            events.add(it)
-                            kListenerCommit.send(DoCommit)
-                        }
-                        delay(waitPatience)
+                    runBlocking {
+
+                        // kick of asynchronous task for receiving data from kafka
+                        val consumer = kafkaTopicListenerAsync<String, String>(
+                                kConsProps,
+                                topic,
+                                waitPatience,
+                                c.kafkaEvents,
+                                c.commitAction,
+                                c.status)
+
+                        if (c.status.receive() == Problem) return@runBlocking
+
+                        //kick of asynchronous task for sending data to kafka
+                        val producer = kafkaTopicWriterAsync(kProdProps,topic,"key", data)
+
+                        while (events.size < data.size && (c.status.poll()?.let { it } != Problem))
+                            c.kafkaEvents.receive().also {
+                                events.add(it)
+                                c.commitAction.send(DoCommit)
+                            }
+
+                        producer.cancelAndJoin()
+                        consumer.cancelAndJoin()
                     }
-
-                    producer.cancelAndJoin()
-                    consumer.cancelAndJoin()
                 }
 
                 events shouldEqual data
             }
 
-            it("should not receive any data when all data is already consumed") {
+            it("should not receive any data when all data is already committed") {
 
-                // kick of asynchronous task for receiving data from kafka
-                val consumer = kafkaTopicListenerAsync<String, String>(
-                        kConsProps,
-                        topic,
-                        waitPatience,
-                        kafkaEvents,
-                        kListenerCommit,
-                        mngmtStatus)
-
-                var imPatience = 0
                 val events = mutableListOf<String>()
 
-                runBlocking {
+                Channels<String,String>().use { c ->
 
-                    while (events.isEmpty() && imPatience < 10) {
-                        (kafkaEvents.poll())?.let {
-                            events.add(it)
-                            kListenerCommit.send(DoCommit)
+                    runBlocking {
+
+                        // kick of asynchronous task for receiving data from kafka
+                        val consumer = kafkaTopicListenerAsync<String, String>(
+                                kConsProps,
+                                topic,
+                                waitPatience,
+                                c.kafkaEvents,
+                                c.commitAction,
+                                c.status)
+
+                        if (c.status.receive() == Problem) return@runBlocking
+
+                        var imPatience = 0
+
+                        while (events.isEmpty() && imPatience < 10) {
+                            c.kafkaEvents.poll()?.let {
+                                events.add(it)
+                                c.commitAction.send(DoCommit)
+                            }
+                            delay(waitPatience)
+                            imPatience++
                         }
-                        delay(waitPatience)
-                        imPatience++
+                        consumer.cancelAndJoin()
                     }
-                    consumer.cancelAndJoin()
                 }
 
                 events.isEmpty() shouldEqualTo true
@@ -137,128 +145,105 @@ object Kafka2JMS : Spek({
 
             afterGroup {
                 kEnv.tearDown()
-                kafkaEvents.close()
-                kListenerCommit.close()
             }
         }
 
-        context("basic send ${data.size} data elements, receive and transform them") {
-
-            beforeGroup { kEnv.start() }
-
-            val kafkaEvents = Channel<String>()
-            val kListenerCommit = Channel<CommitAction>()
-            val trfEvents = Channel<EventTransformed>()
-            val mngmtStatus = Channel<ManagementStatus>()
-
-            it("should receive ${data.size} data elements, transformed to uppercase") {
-
-                // kick of transformer
-                val transformer = eventTransformerAsync(kafkaEvents,trfEvents,mngmtStatus)
-
-                // kick of asynchronous task for sending data to kafka
-                val producer = kafkaTopicWriterAsync(kProdProps, topic, "key", data)
-
-                // kick of asynchronous task for receiving data from kafka
-                val consumer = kafkaTopicListenerAsync<String, String>(
-                        kConsProps,
-                        topic,
-                        waitPatience,
-                        kafkaEvents,
-                        kListenerCommit,
-                        mngmtStatus)
-
-                val events = mutableListOf<String>()
-
-                runBlocking {
-
-                    while (events.size < data.size) {
-                        (trfEvents.poll())?.let {
-                            events.add(it.value)
-                            kListenerCommit.send(DoCommit)
-                        }
-                        delay(waitPatience)
-                    }
-
-                    producer.cancelAndJoin()
-                    consumer.cancelAndJoin()
-                    transformer.cancelAndJoin()
-                }
-
-                events shouldEqual data.map { it.toUpperCase() }
-            }
-
-            afterGroup {
-                kEnv.tearDown()
-                kafkaEvents.close()
-                kListenerCommit.close()
-                trfEvents.close()
-            }
-        }
-
-        context("basic send ${data.size} data elements, receive, transform and to jms") {
+        context("send ${data.size} data elements, receive and transform them") {
 
             beforeGroup {
                 kEnv.start()
             }
 
-            val kafkaEvents = Channel<String>()
-            val kListenerCommit = Channel<CommitAction>()
-            val trfEvents = Channel<EventTransformed>()
-            val mngmtStatus = Channel<ManagementStatus>()
+            it("should receive ${data.size} data elements, transformed to uppercase") {
+
+                val transformed = mutableListOf<String>()
+
+                Channels<String,String>().use { c ->
+
+                    runBlocking {
+
+                        // kick of transformer
+                        val transformer = eventTransformerAsync(
+                                c.kafkaEvents,
+                                c.transformedEvents,
+                                { s -> s.toUpperCase() },
+                                c.status)
+
+                        if (c.status.receive() == Problem) return@runBlocking
+
+                        // kick of asynchronous task for receiving data from kafka
+                        val consumer = kafkaTopicListenerAsync<String, String>(
+                                kConsProps,
+                                topic,
+                                250,
+                                c.kafkaEvents,
+                                c.commitAction,
+                                c.status)
+
+                        if (c.status.receive() == Problem) {
+                            transformer.cancelAndJoin()
+                            return@runBlocking
+                        }
+
+                        // kick of asynchronous task for sending data to kafka
+                        val producer = kafkaTopicWriterAsync(kProdProps, topic, "key", data)
+
+                        while (transformed.size < data.size && (c.status.poll()?.let { it } != Problem))
+                            c.transformedEvents.receive().also {
+                                transformed.add(it)
+                                c.commitAction.send(DoCommit)
+                            }
+
+                        producer.cancelAndJoin()
+                        consumer.cancelAndJoin()
+                        transformer.cancelAndJoin()
+                    }
+                }
+
+                transformed shouldEqual data.map { it.toUpperCase() }
+            }
+
+            afterGroup {
+                kEnv.tearDown()
+            }
+        }
+
+        context("basic send ${data.size} data elements, receive, transform, and send to jms") {
+
+            beforeGroup {
+                kEnv.start()
+            }
 
             it("should receive ${data.size} data elements, transformed to uppercase") {
 
-                // kick of asynchronous jms writer
-                val jmsWriter = jmsWriterAsync(
-                        connectionFactory,
-                        queueName,
-                        trfEvents,
-                        kListenerCommit,
-                        mngmtStatus)
-
-                // kick of transformer
-                val transformer = eventTransformerAsync(kafkaEvents,trfEvents,mngmtStatus)
-
-                // kick of asynchronous task for receiving data from kafka
-                val consumer = kafkaTopicListenerAsync<String, String>(
+                val manager = managePipelineAsync<String,String,String>(
                         kConsProps,
                         topic,
-                        waitPatience,
-                        kafkaEvents,
-                        kListenerCommit,
-                        mngmtStatus)
+                        { s -> s.toUpperCase() },
+                        connectionFactory,
+                        queueName,
+                        { s -> s })
 
-                // kick of asynchronous task for sending data to kafka
                 val producer = kafkaTopicWriterAsync(kProdProps, topic, "key", data)
 
                 runBlocking {
 
-                    // helper object to evaluate elements in jms queue
+                    // helper object to get jms queue size
                     val qSize = EmbeddedActiveMQ(connectionFactory, queueName).use {
-                        while (it.qSize < data.size && mngmtStatus.isEmpty) {
-                            delay(waitPatience)
-                        }
-
+                        while (it.qSize < data.size) delay(waitPatience)
                         it.qSize
                     }
 
                     producer.cancelAndJoin()
-                    consumer.cancelAndJoin()
-                    transformer.cancelAndJoin()
-                    jmsWriter.cancelAndJoin()
+                    manager.cancelAndJoin()
 
-                    println("FINISHED!!")
+                    log.info("Finished")
                     qSize
                 } shouldEqualTo data.size
             }
 
             afterGroup {
                 kEnv.tearDown()
-                kafkaEvents.close()
-                kListenerCommit.close()
-                trfEvents.close()
-                mngmtStatus.close()
             }
         }
     }

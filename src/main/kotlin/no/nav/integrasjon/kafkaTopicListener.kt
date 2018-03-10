@@ -4,8 +4,10 @@ import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.channels.ClosedSendChannelException
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.SendChannel
+import mu.KotlinLogging
 import org.apache.kafka.clients.consumer.CommitFailedException
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.slf4j.LoggerFactory
 
 import java.util.*
 
@@ -13,16 +15,15 @@ sealed class CommitAction
 object DoCommit : CommitAction()
 object NoCommit : CommitAction()
 
-sealed class ManagementStatus
-object Problem: ManagementStatus()
-
 fun <K,V>kafkaTopicListenerAsync(
         consumerProps: Properties,
         topic: String,
         timeout: Long = 10_000,
-        pipeline: SendChannel<V>,
+        kafkaEvents: SendChannel<V>,
         commitAction: ReceiveChannel<CommitAction>,
-        manager: SendChannel<ManagementStatus>) = async {
+        status: SendChannel<Status>) = async {
+
+    val log = KotlinLogging.logger {  }
 
     try {
         KafkaConsumer<K, V>(consumerProps)
@@ -30,22 +31,25 @@ fun <K,V>kafkaTopicListenerAsync(
                 .use { c ->
 
                     var allGood = true
+                    status.send(Ready)
 
                     while (isActive && allGood) {
 
                         c.poll(timeout).forEach { e ->
 
-                            println("FETCHED from kafka!")
+                            log.debug {"FETCHED from kafka!" }
 
                             // send event further down the pipeline
                             try {
-                                pipeline.send(e.value())
+                                kafkaEvents.send(e.value())
 
                                 // wait for feedback from pipeline
                                 when (commitAction.receive()) {
                                     DoCommit -> try {
                                         c.commitSync()
-                                    } catch (e: CommitFailedException) {
+                                    }
+                                    catch (e: CommitFailedException) {
+                                        log.error(e.stackTrace.toString())
                                         allGood = false
                                     }
                                     NoCommit -> {
@@ -55,17 +59,20 @@ fun <K,V>kafkaTopicListenerAsync(
                                 }
                             }
                             catch (e: ClosedSendChannelException) {
+                                log.error(e.stackTrace.toString())
                                 allGood = false
                             }
                         }
                     }
                 }
     }
-    catch (e: Exception) {}
+    catch (e: Exception) {
+        log.error(e.stackTrace.toString())
+    }
     // IllegalArgumentException, IllegalStateException, InvalidOffsetException, WakeupException
     // InterruptException, AuthenticationException, AuthorizationException, KafkaException
     // IllegalArgumentException, IllegalStateException
 
     // notify manager if this job is still active
-    if (isActive) manager.send(Problem)
+    if (isActive) status.send(Problem)
 }
