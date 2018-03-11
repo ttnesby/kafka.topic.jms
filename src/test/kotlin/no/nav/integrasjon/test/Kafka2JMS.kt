@@ -8,7 +8,7 @@ import no.nav.common.KafkaEnvironment
 import no.nav.integrasjon.*
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import no.nav.integrasjon.test.utils.KafkaTopicProducer
-import org.amshove.kluent.shouldEqual
+import org.amshove.kluent.shouldContainAll
 import org.amshove.kluent.shouldEqualTo
 import org.apache.activemq.ActiveMQConnectionFactory
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -27,7 +27,7 @@ object Kafka2JMS : Spek({
 
     val topic = "test"
 
-    val kEnv = KafkaEnvironment(topics = listOf(topic))
+    val kEnv = KafkaEnvironment(2,topics = listOf(topic))
 
     val kCDetails = KafkaClientDetails(
             Properties().apply {
@@ -93,7 +93,7 @@ object Kafka2JMS : Spek({
                     }
                 }
 
-                events shouldEqual data
+                events shouldContainAll  data
             }
 
             it("should not receive any data when all data is already committed") {
@@ -166,7 +166,7 @@ object Kafka2JMS : Spek({
                     }
                 }
 
-                events shouldEqual dataInt
+                events shouldContainAll dataInt
             }
 
             it("should not receive any data when all data is already committed") {
@@ -252,7 +252,7 @@ object Kafka2JMS : Spek({
                     }
                 }
 
-                transformed shouldEqual data.map { it.toUpperCase() }
+                transformed shouldContainAll  data.map { it.toUpperCase() }
             }
 
             afterGroup {
@@ -307,7 +307,7 @@ object Kafka2JMS : Spek({
                     }
                 }
 
-                transformed shouldEqual dataInt.map { it * it }
+                transformed shouldContainAll dataInt.map { it * it }
             }
 
             afterGroup {
@@ -343,7 +343,7 @@ object Kafka2JMS : Spek({
                     manager.cancelAndJoin()
 
                     queueAsList.map { (it as TextMessage).text }
-                } shouldEqual data.map { it.toUpperCase() }
+                } shouldContainAll data.map { it.toUpperCase() }
             }
 
             afterGroup {
@@ -379,7 +379,7 @@ object Kafka2JMS : Spek({
                     manager.cancelAndJoin()
 
                     queueAsList.map { (it as TextMessage).text.toInt() }
-                } shouldEqual dataInt.map { it * it }
+                } shouldContainAll dataInt.map { it * it }
             }
 
             afterGroup {
