@@ -41,8 +41,6 @@ class ManagePipeline<K,V>(
             return@async
         }
 
-        log.debug { "JMSTextMessageWriter::writeAsync is up and running" }
-
         r.add(kafkaTopicConsumer.consumeAsync(c.kafkaEvents, c.commitAction,c.status))
 
         if (c.status.receive() == Problem) {
@@ -50,7 +48,6 @@ class ManagePipeline<K,V>(
             c.close()
             return@async
         }
-        log.debug { "KafkaTopicConsumer::consumeAsync is up and running" }
 
         try {
             while (isActive && (c.status.receive().let {
@@ -62,9 +59,9 @@ class ManagePipeline<K,V>(
             withContext(NonCancellable) {
                 r.reversed().forEach { it.cancelAndJoin() }
                 c.close()
-                log.info("@end of manageAsync - goodbye!")
             }
         }
+        log.info("@end of manageAsync - goodbye!")
     }
 
     companion object {
