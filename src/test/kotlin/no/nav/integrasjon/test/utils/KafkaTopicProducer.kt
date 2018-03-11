@@ -26,7 +26,7 @@ class KafkaTopicProducer<K, in V>(private val clientDetails: KafkaClientDetails,
             // best effort to send data synchronously
             KafkaProducer<K, V>(clientDetails.baseProps).use { p ->
                 data.forEach { d ->
-                    p.send(ProducerRecord<K, V>(clientDetails.topic, null, d)).get()
+                    p.send(ProducerRecord<K, V>(clientDetails.topic, key, d)).get()
                 }
             }
         }

@@ -57,11 +57,13 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
                                 // send event further down the pipeline
 
                                 kafkaEvents.send(e.value())
+                                log.debug { "Sent $e  down the pipeline" }
 
                                 // wait for feedback from pipeline
                                 when (commitAction.receive()) {
                                     DoCommit -> try {
                                         c.commitSync()
+                                        log.debug { "Sync commit is completed" }
                                     }
                                     catch (e: CommitFailedException) {
                                         log.error("CommitFailedException", e)
@@ -87,8 +89,10 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
         // IllegalArgumentException, IllegalStateException
 
         // notify manager if this job is still active
-        if (isActive && !status.isClosedForSend) status.send(Problem)
-
+        if (isActive && !status.isClosedForSend) {
+            status.send(Problem)
+            log.error("Reported problem to manager")
+        }
     }
 
     companion object {
