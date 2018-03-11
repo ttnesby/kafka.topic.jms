@@ -30,6 +30,7 @@ repositories {
 
 dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
+    implementation "org.jetbrains.kotlin:kotlin-reflect"
     implementation "org.apache.kafka:kafka_2.12:$kafka_version"
     implementation "javax.jms:javax.jms-api:$jms_version"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"

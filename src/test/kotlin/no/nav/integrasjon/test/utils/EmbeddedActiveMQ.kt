@@ -1,21 +1,22 @@
 package no.nav.integrasjon.test.utils
 
+import no.nav.integrasjon.JMSDetails
 import javax.jms.ConnectionFactory
 import javax.jms.Session
 
 /**
- * Quick class for embedded active mq
- * Using interface AutoCloseable in order to use .use in kotlin
+ * Class for embedded active mq
+ * Using interface AutoCloseable enabling .use in kotlin
  */
-class EmbeddedActiveMQ(connFactory: ConnectionFactory, private val queueName: String) : AutoCloseable {
+class EmbeddedActiveMQ(val jmsDetails: JMSDetails) : AutoCloseable {
 
-    private val conn = connFactory.createConnection().also {
+    private val conn = jmsDetails.connFactory.createConnection().also {
         it.start()
     }
     private val session = conn.createSession(false, Session.AUTO_ACKNOWLEDGE)
 
-    val qSize
-        get() = session.createBrowser(session.createQueue(queueName)).enumeration.toList().size
+    val queue
+        get() = session.createBrowser(session.createQueue(jmsDetails.queueName)).enumeration.toList()
 
     override fun close() {
         conn.close()

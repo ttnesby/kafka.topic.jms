@@ -7,9 +7,13 @@ import kotlinx.coroutines.experimental.channels.SendChannel
 import mu.KotlinLogging
 import javax.jms.*
 
+data class JMSDetails(
+        val connFactory: ConnectionFactory,
+        val queueName: String
+)
+
 fun <T>jmsWriterAsync(
-        connFactory: ConnectionFactory,
-        queueName: String,
+        jmsDetails: JMSDetails,
         data: ReceiveChannel<T>,
         toText: (T) -> String,
         commitAction: SendChannel<CommitAction>,
@@ -18,10 +22,10 @@ fun <T>jmsWriterAsync(
     val log = KotlinLogging.logger {  }
 
     try {
-        connFactory.createConnection().use { c ->
+        jmsDetails.connFactory.createConnection().use { c ->
             c.start()
             val s = c.createSession(false, Session.AUTO_ACKNOWLEDGE)
-            val p = s.createProducer(s.createQueue(queueName))
+            val p = s.createProducer(s.createQueue(jmsDetails.queueName))
 
             var allGood = true
             status.send(Ready)

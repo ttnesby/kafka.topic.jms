@@ -2,76 +2,104 @@ package no.nav.integrasjon
 
 import kotlinx.coroutines.experimental.CancellationException
 import kotlinx.coroutines.experimental.async
-import kotlinx.coroutines.experimental.channels.ClosedSendChannelException
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.SendChannel
 import mu.KotlinLogging
 import org.apache.kafka.clients.consumer.CommitFailedException
+import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.slf4j.LoggerFactory
-
 import java.util.*
+import kotlin.reflect.full.starProjectedType
+
+data class KafkaClientDetails(
+        val baseProps: Properties,
+        val topic: String,
+        val pollTimeout: Long = 10_000L //for consumer
+)
 
 sealed class CommitAction
 object DoCommit : CommitAction()
 object NoCommit : CommitAction()
 
-fun <K,V>kafkaTopicListenerAsync(
-        consumerProps: Properties,
-        topic: String,
-        timeout: Long = 10_000,
-        kafkaEvents: SendChannel<V>,
-        commitAction: ReceiveChannel<CommitAction>,
-        status: SendChannel<Status>) = async {
+inline fun <reified K, reified V> consumerInjection(baseProps: Properties) = baseProps.apply {
+    set(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(K::class.starProjectedType))
+    set(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(V::class.starProjectedType))
 
-    val log = KotlinLogging.logger {  }
+    // want to be a loner for topic
+    set(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString())
+    set(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    // only commit after successful put to JMS
+    set(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
+    // poll only one record of
+    set(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
+}
 
-    try {
-        KafkaConsumer<K, V>(consumerProps)
-                .apply { subscribe(kotlin.collections.listOf(topic)) }
-                .use { c ->
+class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails) {
 
-                    var allGood = true
-                    status.send(Ready)
+    fun consumeAsync(
+            kafkaEvents: SendChannel<V>,
+            commitAction: ReceiveChannel<CommitAction>,
+            status: SendChannel<Status>) = async {
+        try {
+            KafkaConsumer<K, V>(clientDetails.baseProps)
+                    .apply { subscribe(kotlin.collections.listOf(clientDetails.topic)) }
+                    .use { c ->
 
-                    while (isActive && allGood) {
+                        var allGood = true
+                        status.send(Ready)
 
-                        c.poll(timeout).forEach { e ->
+                        while (isActive && allGood) {
 
-                            log.debug {"FETCHED from kafka!" }
+                            c.poll(clientDetails.pollTimeout).forEach { e ->
 
-                            // send event further down the pipeline
+                                log.debug {"FETCHED from kafka!" }
 
-                            kafkaEvents.send(e.value())
+                                // send event further down the pipeline
 
-                            // wait for feedback from pipeline
-                            when (commitAction.receive()) {
-                                DoCommit -> try {
-                                    c.commitSync()
-                                }
-                                catch (e: CommitFailedException) {
-                                    log.error("CommitFailedException", e)
-                                    allGood = false
-                                }
-                                NoCommit -> {
-                                    // problems further down the pipeline
-                                    allGood = false
+                                kafkaEvents.send(e.value())
+
+                                // wait for feedback from pipeline
+                                when (commitAction.receive()) {
+                                    DoCommit -> try {
+                                        c.commitSync()
+                                    }
+                                    catch (e: CommitFailedException) {
+                                        log.error("CommitFailedException", e)
+                                        allGood = false
+                                    }
+                                    NoCommit -> {
+                                        // problems further down the pipeline
+                                        allGood = false
+                                    }
                                 }
                             }
                         }
                     }
-                }
-    }
-    catch (e: Exception) {
-        when (e) {
-            is CancellationException -> {/* it's ok*/ }
-            else -> log.error("Exception", e)
         }
-    }
-    // IllegalArgumentException, IllegalStateException, InvalidOffsetException, WakeupException
-    // InterruptException, AuthenticationException, AuthorizationException, KafkaException
-    // IllegalArgumentException, IllegalStateException
+        catch (e: Exception) {
+            when (e) {
+                is CancellationException -> {/* it's ok*/ }
+                else -> log.error("Exception", e)
+            }
+        }
+        // IllegalArgumentException, IllegalStateException, InvalidOffsetException, WakeupException
+        // InterruptException, AuthenticationException, AuthorizationException, KafkaException
+        // IllegalArgumentException, IllegalStateException
 
-    // notify manager if this job is still active
-    if (isActive && !status.isClosedForSend) status.send(Problem)
+        // notify manager if this job is still active
+        if (isActive && !status.isClosedForSend) status.send(Problem)
+
+    }
+
+    companion object {
+
+        private val log = KotlinLogging.logger {  }
+
+        inline fun <reified K, reified V> init(clientDetails: KafkaClientDetails) = KafkaTopicConsumer<K,V>(
+                        KafkaClientDetails(
+                                consumerInjection<K,V>(clientDetails.baseProps),
+                                clientDetails.topic,
+                                clientDetails.pollTimeout
+                        ))
+    }
 }

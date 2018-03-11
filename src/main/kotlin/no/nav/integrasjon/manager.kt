@@ -3,8 +3,6 @@ package no.nav.integrasjon
 import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.channels.Channel
 import mu.KotlinLogging
-import java.util.*
-import javax.jms.ConnectionFactory
 
 sealed class Status
 object Problem: Status()
@@ -25,70 +23,80 @@ class Channels<V,T>(noOfCoroutines: Int): AutoCloseable {
     }
 }
 
-fun <K,V,T>managePipelineAsync(
-        consumerProps: Properties,
-        topic: String,
-        transform: (V) -> T,
-        connectionFactory: ConnectionFactory,
-        queueName: String,
-        toText: (T) -> String) = async {
+class ManagePipeline<K,V,T>(
+        private val kafkaTopicConsumer: KafkaTopicConsumer<K,V>,
+        private val transform: (V) -> T,
+        private val jmsDetails: JMSDetails,
+        private val toText: (T) -> String) {
 
-    val log = KotlinLogging.logger { }
-    val c = Channels<V, T>(3)
-    val r = mutableListOf<Job>()
+    private val c = Channels<V,T>(3)
 
-    // kick off coroutines in reverse order
+    fun manageAsync() = async {
 
-    r.add(jmsWriterAsync(
-            connectionFactory,
-            queueName,
-            c.transformedEvents,
-            toText,
-            c.commitAction,
-            c.status))
+        val r = mutableListOf<Job>()
 
-    if (c.status.receive() == Problem) {
-        c.close()
-        return@async
-    }
+        // kick off coroutines in reverse order
 
-    log.debug { "jmsWriter up and running" }
+        r.add(jmsWriterAsync(
+                jmsDetails,
+                c.transformedEvents,
+                toText,
+                c.commitAction,
+                c.status))
 
-    r.add(eventTransformerAsync(
-            c.kafkaEvents,
-            c.transformedEvents,
-            transform,
-            c.status))
-
-    if (c.status.receive() == Problem) {
-        r.filter { it.isActive }.forEach { it.cancelAndJoin() }
-        c.close()
-        return@async
-    }
-    log.debug { "eventTransformer up and running" }
-
-    r.add(kafkaTopicListenerAsync<K, V>(
-            consumerProps,
-            topic,
-            kafkaEvents = c.kafkaEvents,
-            commitAction = c.commitAction,
-            status = c.status))
-
-    if (c.status.receive() == Problem) {
-        r.filter { it.isActive }.forEach { it.cancelAndJoin() }
-        c.close()
-        return@async
-    }
-    log.debug { "kafkaTopicListener up and running" }
-
-    try {
-        while (isActive && (c.status.receive().let { it } != Problem)) {}
-    }
-    finally {
-        withContext(NonCancellable) {
-            r.reversed().forEach { it.cancelAndJoin() }
+        if (c.status.receive() == Problem) {
             c.close()
-            log.info("@end of async - leaving managePipelineAsync")
+            return@async
         }
+
+        log.debug { "jmsWriter up and running" }
+
+        r.add(eventTransformerAsync(
+                c.kafkaEvents,
+                c.transformedEvents,
+                transform,
+                c.status))
+
+        if (c.status.receive() == Problem) {
+            r.filter { it.isActive }.forEach { it.cancelAndJoin() }
+            c.close()
+            return@async
+        }
+        log.debug { "eventTransformer up and running" }
+
+        r.add(kafkaTopicConsumer.consumeAsync(c.kafkaEvents, c.commitAction,c.status))
+
+        if (c.status.receive() == Problem) {
+            r.filter { it.isActive }.forEach { it.cancelAndJoin() }
+            c.close()
+            return@async
+        }
+        log.debug { "kafkaTopicListener up and running" }
+
+        try {
+            while (isActive && (c.status.receive().let { it } != Problem)) {}
+        }
+        finally {
+            withContext(NonCancellable) {
+                r.reversed().forEach { it.cancelAndJoin() }
+                c.close()
+                log.info("@end of async - leaving managePipelineAsync")
+            }
+        }
+    }
+
+    companion object {
+
+        private val log = KotlinLogging.logger {  }
+
+        inline fun <reified K, reified V, T> init(
+                clientDetails: KafkaClientDetails,
+                noinline transform: (V) -> T,
+                jmsDetails: JMSDetails,
+                noinline toText: (T) -> String): ManagePipeline<K,V,T> = ManagePipeline(
+                    KafkaTopicConsumer.init(clientDetails),
+                    transform,
+                    jmsDetails,
+                    toText)
     }
 }

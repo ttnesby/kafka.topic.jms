@@ -7,7 +7,7 @@ import mu.KotlinLogging
 import no.nav.common.KafkaEnvironment
 import no.nav.integrasjon.*
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
-import no.nav.integrasjon.test.utils.kafkaTopicWriterAsync
+import no.nav.integrasjon.test.utils.KafkaTopicProducer
 import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldEqualTo
 import org.apache.activemq.ActiveMQConnectionFactory
@@ -17,9 +17,8 @@ import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.context
 import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
-import org.jetbrains.spek.api.dsl.xcontext
 import java.util.*
-import javax.jms.ConnectionFactory
+import javax.jms.TextMessage
 
 
 object Kafka2JMS : Spek({
@@ -27,52 +26,46 @@ object Kafka2JMS : Spek({
     val log = KotlinLogging.logger {  }
 
     val topic = "test"
+
     val kEnv = KafkaEnvironment(topics = listOf(topic))
 
-    // The long way of config params for kafka producer and consumer
-    val kProdProps = Properties().apply {
-        set(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-        set(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
-        set(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
+    val kCDetails = KafkaClientDetails(
+            Properties().apply {
+                set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
+                set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
+            },
+            topic,
+            500
+    )
 
-        set(ProducerConfig.ACKS_CONFIG, "all")
-        set(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1)
+    val kPDetails = KafkaClientDetails(
+            Properties().apply {
+                set(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
+                set(ProducerConfig.CLIENT_ID_CONFIG, "kafkaTopicProducer")
+            },
+            topic
+    )
 
-        set(ProducerConfig.CLIENT_ID_CONFIG, "kafkaTopicWriter")
-    }
+    val jmsDetails = JMSDetails(
+            ActiveMQConnectionFactory("vm://localhost?broker.persistent=false"),
+            "kafkaEvents"
+    )
 
-    val kConsProps = Properties().apply {
-        set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-        set(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer")
-        set(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringDeserializer")
 
-        // guarantee for being alone for this topic
-        set(ConsumerConfig.GROUP_ID_CONFIG, UUID.randomUUID().toString())
-        set(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-
-        // only commit after successful put to MQ
-        set(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
-        set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicListener")
-
-        // poll only one record of
-        set(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
-    }
-
-    val connectionFactory: ConnectionFactory = ActiveMQConnectionFactory("vm://localhost?broker.persistent=false")
-    val queueName = "kafkaEvents"
-
-    describe("Kafka topic listener to transform to jms backend tests") {
+    describe("Kafka topic listener transforming events to jms backend tests") {
 
         val data = (1..10).map {"data-$it"}
+        val dataInt = (1..10).map { it }
+
         val waitPatience = 100L
 
-        xcontext("send ${data.size} data elements to kafka and receive them") {
+        context("send ${data.size} string elements to kafka and receive them") {
 
             beforeGroup {
                 kEnv.start()
             }
 
-            it("should receive ${data.size} data elements") {
+            it("should receive ${data.size} string elements") {
 
                 val events = mutableListOf<String>()
 
@@ -81,18 +74,13 @@ object Kafka2JMS : Spek({
                     runBlocking {
 
                         // kick of asynchronous task for receiving data from kafka
-                        val consumer = kafkaTopicListenerAsync<String, String>(
-                                kConsProps,
-                                topic,
-                                waitPatience,
-                                c.kafkaEvents,
-                                c.commitAction,
-                                c.status)
+                        val consumer = KafkaTopicConsumer.init<String, String>(kCDetails)
+                                .consumeAsync(c.kafkaEvents,c.commitAction,c.status)
 
                         if (c.status.receive() == Problem) return@runBlocking
 
                         //kick of asynchronous task for sending data to kafka
-                        val producer = kafkaTopicWriterAsync(kProdProps,topic,"key", data)
+                        val producer = KafkaTopicProducer.init<String,String>(kPDetails, "key").produceAsync(data)
 
                         while (events.size < data.size && (c.status.poll()?.let { it } != Problem))
                             c.kafkaEvents.receive().also {
@@ -117,13 +105,8 @@ object Kafka2JMS : Spek({
                     runBlocking {
 
                         // kick of asynchronous task for receiving data from kafka
-                        val consumer = kafkaTopicListenerAsync<String, String>(
-                                kConsProps,
-                                topic,
-                                waitPatience,
-                                c.kafkaEvents,
-                                c.commitAction,
-                                c.status)
+                        val consumer = KafkaTopicConsumer.init<String, String>(kCDetails)
+                                .consumeAsync(c.kafkaEvents,c.commitAction,c.status)
 
                         if (c.status.receive() == Problem) return@runBlocking
 
@@ -149,13 +132,86 @@ object Kafka2JMS : Spek({
             }
         }
 
-        xcontext("send ${data.size} data elements, receive and transform them") {
+        context("send ${dataInt.size} integer elements to kafka and receive them") {
 
             beforeGroup {
                 kEnv.start()
             }
 
-            it("should receive ${data.size} data elements, transformed to uppercase") {
+            it("should receive ${data.size} string elements") {
+
+                val events = mutableListOf<Int>()
+
+                Channels<Int,Int>(1).use { c ->
+
+                    runBlocking {
+
+                        // kick of asynchronous task for receiving data from kafka
+                        val consumer = KafkaTopicConsumer.init<String, Int>(kCDetails)
+                                .consumeAsync(c.kafkaEvents,c.commitAction,c.status)
+
+                        if (c.status.receive() == Problem) return@runBlocking
+
+                        //kick of asynchronous task for sending data to kafka
+                        val producer = KafkaTopicProducer.init<String,Int>(kPDetails, "key").produceAsync(dataInt)
+
+                        while (events.size < data.size && (c.status.poll()?.let { it } != Problem))
+                            c.kafkaEvents.receive().also {
+                                events.add(it)
+                                c.commitAction.send(DoCommit)
+                            }
+
+                        producer.cancelAndJoin()
+                        consumer.cancelAndJoin()
+                    }
+                }
+
+                events shouldEqual dataInt
+            }
+
+            it("should not receive any data when all data is already committed") {
+
+                val events = mutableListOf<Int>()
+
+                Channels<Int,Int>(1).use { c ->
+
+                    runBlocking {
+
+                        // kick of asynchronous task for receiving data from kafka
+                        val consumer = KafkaTopicConsumer.init<String, Int>(kCDetails)
+                                .consumeAsync(c.kafkaEvents,c.commitAction,c.status)
+
+                        if (c.status.receive() == Problem) return@runBlocking
+
+                        var imPatience = 0
+
+                        while (events.isEmpty() && imPatience < 10) {
+                            c.kafkaEvents.poll()?.let {
+                                events.add(it)
+                                c.commitAction.send(DoCommit)
+                            }
+                            delay(waitPatience)
+                            imPatience++
+                        }
+                        consumer.cancelAndJoin()
+                    }
+                }
+
+                events.isEmpty() shouldEqualTo true
+            }
+
+            afterGroup {
+                kEnv.tearDown()
+            }
+        }
+
+        context("send ${data.size} string elements, receive and transform them") {
+
+            beforeGroup {
+                kEnv.start()
+            }
+
+            it("should receive ${data.size} string elements, transformed to uppercase") {
 
                 val transformed = mutableListOf<String>()
 
@@ -173,13 +229,8 @@ object Kafka2JMS : Spek({
                         if (c.status.receive() == Problem) return@runBlocking
 
                         // kick of asynchronous task for receiving data from kafka
-                        val consumer = kafkaTopicListenerAsync<String, String>(
-                                kConsProps,
-                                topic,
-                                250,
-                                c.kafkaEvents,
-                                c.commitAction,
-                                c.status)
+                        val consumer = KafkaTopicConsumer.init<String, String>(kCDetails)
+                                .consumeAsync(c.kafkaEvents,c.commitAction,c.status)
 
                         if (c.status.receive() == Problem) {
                             transformer.cancelAndJoin()
@@ -187,7 +238,7 @@ object Kafka2JMS : Spek({
                         }
 
                         // kick of asynchronous task for sending data to kafka
-                        val producer = kafkaTopicWriterAsync(kProdProps, topic, "key", data)
+                        val producer = KafkaTopicProducer.init<String,String>(kPDetails, "key").produceAsync(data)
 
                         while (transformed.size < data.size && (c.status.poll()?.let { it } != Problem))
                             c.transformedEvents.receive().also {
@@ -209,37 +260,126 @@ object Kafka2JMS : Spek({
             }
         }
 
-        context("basic send ${data.size} data elements, receive, transform, and send to jms") {
+        context("send ${dataInt.size} integer elements, receive and transform them") {
 
             beforeGroup {
                 kEnv.start()
             }
 
-            it("should receive ${data.size} data elements, transformed to uppercase") {
+            it("should receive ${data.size} integer elements, transformed to square") {
 
-                val manager = managePipelineAsync<String,String,String>(
-                        kConsProps,
-                        topic,
+                val transformed = mutableListOf<Int>()
+
+                Channels<Int,Int>(2).use { c ->
+
+                    runBlocking {
+
+                        // kick of transformer
+                        val transformer = eventTransformerAsync(
+                                c.kafkaEvents,
+                                c.transformedEvents,
+                                { s -> s * s },
+                                c.status)
+
+                        if (c.status.receive() == Problem) return@runBlocking
+
+                        // kick of asynchronous task for receiving data from kafka
+                        val consumer = KafkaTopicConsumer.init<String, Int>(kCDetails)
+                                .consumeAsync(c.kafkaEvents,c.commitAction,c.status)
+
+                        if (c.status.receive() == Problem) {
+                            transformer.cancelAndJoin()
+                            return@runBlocking
+                        }
+
+                        // kick of asynchronous task for sending data to kafka
+                        val producer = KafkaTopicProducer.init<String,Int>(kPDetails, "key").produceAsync(dataInt)
+
+                        while (transformed.size < data.size && (c.status.poll()?.let { it } != Problem))
+                            c.transformedEvents.receive().also {
+                                transformed.add(it)
+                                c.commitAction.send(DoCommit)
+                            }
+
+                        producer.cancelAndJoin()
+                        consumer.cancelAndJoin()
+                        transformer.cancelAndJoin()
+                    }
+                }
+
+                transformed shouldEqual dataInt.map { it * it }
+            }
+
+            afterGroup {
+                kEnv.tearDown()
+            }
+        }
+
+        context("basic send ${data.size} string elements, receive, transform, and send to jms") {
+
+            beforeGroup {
+                kEnv.start()
+            }
+
+            it("should receive ${data.size} string elements, transformed to uppercase") {
+
+                val manager = ManagePipeline.init<String,String,String>(
+                        kCDetails,
                         { s -> s.toUpperCase() },
-                        connectionFactory,
-                        queueName,
-                        { s -> s })
+                        jmsDetails,
+                        { s -> s }).manageAsync()
 
-                val producer = kafkaTopicWriterAsync(kProdProps, topic, "key", data)
+                val producer = KafkaTopicProducer.init<String,String>(kPDetails, "key").produceAsync(data)
 
                 runBlocking {
 
                     // helper object to get jms queue size
-                    val qSize = EmbeddedActiveMQ(connectionFactory, queueName).use {
-                        while (it.qSize < data.size) delay(waitPatience)
-                        it.qSize
+                    val queueAsList = EmbeddedActiveMQ(jmsDetails).use {
+                        while (it.queue.size < data.size) delay(waitPatience)
+                        it.queue
                     }
 
                     producer.cancelAndJoin()
                     manager.cancelAndJoin()
 
-                    qSize
-                } shouldEqualTo data.size
+                    queueAsList.map { (it as TextMessage).text }
+                } shouldEqual data.map { it.toUpperCase() }
+            }
+
+            afterGroup {
+                kEnv.tearDown()
+            }
+        }
+
+        context("basic send ${dataInt.size} integer elements, receive, transform, and send to jms") {
+
+            beforeGroup {
+                kEnv.start()
+            }
+
+            it("should receive ${dataInt.size} integer elements, transformed to square") {
+
+                val manager = ManagePipeline.init<String,Int,String>(
+                        kCDetails,
+                        { s -> (s * s).toString() },
+                        jmsDetails,
+                        { s -> s }).manageAsync()
+
+                val producer = KafkaTopicProducer.init<String,Int>(kPDetails, "key").produceAsync(dataInt)
+
+                runBlocking {
+
+                    // helper object to get jms queue size
+                    val queueAsList = EmbeddedActiveMQ(jmsDetails).use {
+                        while (it.queue.size < data.size) delay(waitPatience)
+                        it.queue
+                    }
+
+                    producer.cancelAndJoin()
+                    manager.cancelAndJoin()
+
+                    queueAsList.map { (it as TextMessage).text.toInt() }
+                } shouldEqual dataInt.map { it * it }
             }
 
             afterGroup {
