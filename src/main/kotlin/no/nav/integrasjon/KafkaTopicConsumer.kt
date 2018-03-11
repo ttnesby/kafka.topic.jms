@@ -48,6 +48,8 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
                         var allGood = true
                         status.send(Ready)
 
+                        log.info("@start of consumeAsync")
+
                         while (isActive && allGood) {
 
                             c.poll(clientDetails.pollTimeout).forEach { e ->
@@ -93,6 +95,7 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
             status.send(Problem)
             log.error("Reported problem to manager")
         }
+        log.info("@end of consumeAsync - goodbye!")
     }
 
     companion object {

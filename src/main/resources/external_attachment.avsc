@@ -1,0 +1,11 @@
+{
+  "namespace": "no.nav.altinnkanal.avro",
+  "type": "record",
+  "name": "ExternalAttachment",
+  "fields": [
+    { "name": "batch", "type": "string" },
+    { "name": "sc", "type": "string" },
+    { "name": "sec", "type": "string" },
+    { "name": "archRef", "type": "string" }
+  ]
+}

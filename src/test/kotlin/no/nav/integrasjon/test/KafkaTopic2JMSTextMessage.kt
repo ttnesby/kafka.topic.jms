@@ -10,12 +10,17 @@ import no.nav.integrasjon.test.utils.KafkaTopicProducer
 import org.amshove.kluent.shouldContainAll
 import org.amshove.kluent.shouldEqualTo
 import org.apache.activemq.ActiveMQConnectionFactory
+import org.apache.avro.Schema
+import org.apache.avro.generic.GenericData
+import org.apache.avro.generic.GenericRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.context
 import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
+import org.jetbrains.spek.api.dsl.xcontext
+import java.io.File
 import java.util.*
 import javax.jms.TextMessage
 
@@ -24,8 +29,9 @@ object KafkaTopic2JMSTextMessage : Spek({
 
     val topicStr = "testString"
     val topicInt = "testInt"
+    val topicAvro = "testAvro"
 
-    val kEnv = KafkaEnvironment(3,topics = listOf(topicStr,topicInt))
+    val kEnv = KafkaEnvironment(topics = listOf(topicStr,topicInt,topicAvro), withSchemaRegistry = true)
 
     val kCDetailsStr = KafkaClientDetails(
             Properties().apply {
@@ -45,6 +51,16 @@ object KafkaTopic2JMSTextMessage : Spek({
             250
     )
 
+    val kCDetailsAvro = KafkaClientDetails(
+            Properties().apply {
+                set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
+                set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
+                set("schema.registry.url",kEnv.serverPark.schemaregistry.url)
+            },
+            topicAvro,
+            250
+    )
+
     val kPDetailsStr = KafkaClientDetails(
             Properties().apply {
                 set(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
@@ -59,6 +75,15 @@ object KafkaTopic2JMSTextMessage : Spek({
                 set(ProducerConfig.CLIENT_ID_CONFIG, "kafkaTopicProducer")
             },
             topicInt
+    )
+
+    val kPDetailsAvro = KafkaClientDetails(
+            Properties().apply {
+                set(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
+                set(ProducerConfig.CLIENT_ID_CONFIG, "kafkaTopicProducer")
+                set("schema.registry.url",kEnv.serverPark.schemaregistry.url)
+            },
+            topicAvro
     )
 
     val jmsDetails = JMSDetails(
@@ -78,10 +103,28 @@ object KafkaTopic2JMSTextMessage : Spek({
         }
     }
 
+    class TrfAvro : JMSTextMessageWriter<GenericRecord>(jmsDetails) {
+        override fun transform(event: GenericRecord): TextMessage = session.createTextMessage().apply {
+            this.text = event.toString()
+        }
+    }
+
+    val schemaFile = File("src/main/resources/external_attachment.avsc")
+    val parser = Schema.Parser()
+    val schema = parser.parse(schemaFile)
+
     describe("Kafka topic listener transforming events to jms backend tests") {
 
         val data = (1..10).map {"data-$it"}
         val dataInt = (1..10).map { it }
+        val dataAvro = (1..10).map {
+            GenericData.Record(schema).apply {
+                put("batch","batch-$it")
+                put("sc","sc-$it")
+                put("sec","sec-$it")
+                put("archRef","archRef-$it")
+            }
+        }
 
         val waitPatience = 100L
 
@@ -286,6 +329,39 @@ object KafkaTopic2JMSTextMessage : Spek({
 
                     queueAsList.map { (it as TextMessage).text.toInt() }
                 } shouldContainAll dataInt.map { it * it }
+            }
+
+            afterGroup {
+                //kEnv.tearDown()
+            }
+        }
+
+        context("basic send ${dataAvro.size} avro elements, receive, transform, and send to jms") {
+
+            beforeGroup {
+                //kEnv.start()
+            }
+
+            it("should receive ${dataAvro.size} avro elements, transformed to toString") {
+
+                val manager = ManagePipeline.init<String,GenericRecord>(kCDetailsAvro, TrfAvro()).manageAsync()
+                val producer = KafkaTopicProducer.init<String,GenericRecord>(
+                        kPDetailsAvro,
+                        "key").produceAsync(dataAvro)
+
+                runBlocking {
+
+                    // helper object to get jms queue size
+                    val queueAsList = EmbeddedActiveMQ(jmsDetails).use {
+                        while (it.queue.size < data.size) delay(waitPatience)
+                        it.queue
+                    }
+
+                    producer.cancelAndJoin()
+                    manager.cancelAndJoin()
+
+                    queueAsList.map { (it as TextMessage).text }
+                } shouldContainAll dataAvro.map { it.toString()  }
             }
 
             afterGroup {

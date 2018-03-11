@@ -3,10 +3,11 @@ buildscript {
     ext.jms_version = '2.0.1'
     ext.kafka_version = '1.0.0'
     ext.ibm_mq_version = '9.0.4.0'
-    ext.embeddedkafka_version = '0.6.2'
+    ext.embeddedkafka_version = '0.6.3'
     ext.coroutines_version = '0.22.5'
     ext.active_mq_version = '5.15.3'
     ext.kotlin_loggin_version = '1.5.3'
+    ext.confluent_version = '4.0.0'
 }
 
 plugins{
@@ -32,9 +33,12 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     implementation "org.jetbrains.kotlin:kotlin-reflect"
     implementation "org.apache.kafka:kafka_2.12:$kafka_version"
+    implementation "io.confluent:kafka-avro-serializer:$confluent_version"
     implementation "javax.jms:javax.jms-api:$jms_version"
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-core:$coroutines_version"
     implementation "io.github.microutils:kotlin-logging:$kotlin_loggin_version"
+    implementation "ch.qos.logback:logback-classic:1.2.3"
+    implementation "org.slf4j:log4j-over-slf4j:1.7.25"
 
     testImplementation "org.apache.activemq:activemq-all:$active_mq_version"
     //testImplementation "org.apache.activemq:artemis-jms-client-all:$active_mq_version"

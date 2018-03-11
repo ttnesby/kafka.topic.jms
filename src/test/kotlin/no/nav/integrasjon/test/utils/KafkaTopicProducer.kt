@@ -24,6 +24,8 @@ class KafkaTopicProducer<K, in V>(private val clientDetails: KafkaClientDetails,
 
         try {
             // best effort to send data synchronously
+            log.info("@start of produceAsync")
+
             KafkaProducer<K, V>(clientDetails.baseProps).use { p ->
                 data.forEach { d ->
                     p.send(ProducerRecord<K, V>(clientDetails.topic, key, d)).get()
@@ -36,6 +38,8 @@ class KafkaTopicProducer<K, in V>(private val clientDetails: KafkaClientDetails,
                 else -> log.error("Exception", e)
             }
         }
+
+        log.info("@end of produceAsync - goodbye!")
     }
 
     companion object {

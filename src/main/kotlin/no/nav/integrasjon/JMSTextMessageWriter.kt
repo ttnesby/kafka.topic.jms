@@ -31,6 +31,8 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
                 var allGood = true
                 status.send(Ready)
 
+                log.info("@start of writeAsync")
+
                 // receive data, send to jms, and tell pipeline to commit
                 while (isActive && allGood) {
 
@@ -62,6 +64,8 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
 
         // notify manager if this job is still active
         if (isActive && !status.isClosedForSend) status.send(Problem)
+
+        log.info("@end of writeAsync - goodbye!")
     }
 
     abstract fun transform(event: V): TextMessage
