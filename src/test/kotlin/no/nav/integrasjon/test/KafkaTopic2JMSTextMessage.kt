@@ -125,9 +125,9 @@ object KafkaTopic2JMSTextMessage : Spek({
 
     describe("Kafka topic listener transforming events to jms backend tests") {
 
-        val data = (1..10).map {"data-$it"}
-        val dataInt = (1..10).map { it }
-        val dataAvro = (1..10).map {
+        val data = (1..100).map {"data-$it"}
+        val dataInt = (1..100).map { it }
+        val dataAvro = (1..100).map {
             GenericData.Record(schema).apply {
                 put("batch","batch-$it")
                 put("sc","sc-$it")
@@ -135,7 +135,7 @@ object KafkaTopic2JMSTextMessage : Spek({
                 put("archRef","archRef-$it")
             }
         }
-        val dataMusic = (1..5).map {
+        val dataMusic = (1..100).map {
             GenericData.Record(schema).apply {
                 put("batch", getFileAsString("src/test/resources/musicCatalog.xml"))
                 put("sc","sc-$it")

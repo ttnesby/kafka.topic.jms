@@ -22,19 +22,6 @@ sealed class CommitAction
 object DoCommit : CommitAction()
 object NoCommit : CommitAction()
 
-inline fun <reified K, reified V> consumerInjection(baseProps: Properties) = baseProps.apply {
-    set(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(K::class.starProjectedType))
-    set(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(V::class.starProjectedType))
-
-    // want to be a loner for topic / not using group id - see assignment to partitions for the topic
-    //set(ConsumerConfig.GROUP_ID_CONFIG, "")
-    set(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    // only commit after successful put to JMS
-    set(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
-    // poll only one record of
-    set(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
-}
-
 class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails) {
 
     fun consumeAsync(
@@ -114,5 +101,18 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
                                 clientDetails.topic,
                                 clientDetails.pollTimeout
                         ))
+
+        inline fun <reified K, reified V> consumerInjection(baseProps: Properties) = baseProps.apply {
+            set(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(K::class.starProjectedType))
+            set(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(V::class.starProjectedType))
+
+            // want to be a loner for topic / not using group id - see assignment to partitions for the topic
+            //set(ConsumerConfig.GROUP_ID_CONFIG, "")
+            set(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+            // only commit after successful put to JMS
+            set(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
+            // poll only one record of
+            set(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
+        }
     }
 }

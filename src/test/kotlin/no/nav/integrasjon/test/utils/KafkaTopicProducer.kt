@@ -11,12 +11,6 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import java.util.*
 import kotlin.reflect.full.starProjectedType
 
-inline fun <reified K, reified V> producerInjection(baseProps: Properties) = baseProps.apply {
-    set(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, getKafkaSerializer(K::class.starProjectedType))
-    set(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, getKafkaSerializer(V::class.starProjectedType))
-    set(ProducerConfig.ACKS_CONFIG, "all")
-    set(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1)
-}
 
 class KafkaTopicProducer<K, in V>(private val clientDetails: KafkaClientDetails, private val key: K) {
 
@@ -54,5 +48,12 @@ class KafkaTopicProducer<K, in V>(private val clientDetails: KafkaClientDetails,
                         producerInjection<K,V>(clientDetails.baseProps),
                         clientDetails.topic),
                 key)
+
+        inline fun <reified K, reified V> producerInjection(baseProps: Properties) = baseProps.apply {
+            set(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, getKafkaSerializer(K::class.starProjectedType))
+            set(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, getKafkaSerializer(V::class.starProjectedType))
+            set(ProducerConfig.ACKS_CONFIG, "all")
+            set(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1)
+        }
     }
 }

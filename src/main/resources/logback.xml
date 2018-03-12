@@ -7,7 +7,7 @@
         </encoder>
     </appender>
 
-    <logger name="no.nav" level="DEBUG"/>
+    <logger name="no.nav" level="INFO"/>
     <logger name="org.apache.cxf.services" level="WARN" additivity="false"/>
 
     <root level="INFO">
