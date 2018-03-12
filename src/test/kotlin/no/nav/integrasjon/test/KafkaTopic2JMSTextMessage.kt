@@ -1,8 +1,7 @@
 package no.nav.integrasjon.test
 
-import kotlinx.coroutines.experimental.cancelAndJoin
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.runBlocking
+import kotlinx.coroutines.experimental.*
+import mu.KotlinLogging
 import no.nav.common.KafkaEnvironment
 import no.nav.integrasjon.*
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
@@ -21,7 +20,9 @@ import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
 import org.jetbrains.spek.api.dsl.xcontext
 import java.io.File
+import java.nio.file.Files
 import java.util.*
+import java.util.stream.Collectors
 import javax.jms.TextMessage
 
 
@@ -39,7 +40,7 @@ object KafkaTopic2JMSTextMessage : Spek({
                 set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
             },
             topicStr,
-            250
+            100
     )
 
     val kCDetailsInt = KafkaClientDetails(
@@ -48,7 +49,7 @@ object KafkaTopic2JMSTextMessage : Spek({
                 set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
             },
             topicInt,
-            250
+            100
     )
 
     val kCDetailsAvro = KafkaClientDetails(
@@ -58,7 +59,7 @@ object KafkaTopic2JMSTextMessage : Spek({
                 set("schema.registry.url",kEnv.serverPark.schemaregistry.url)
             },
             topicAvro,
-            250
+            100
     )
 
     val kPDetailsStr = KafkaClientDetails(
@@ -92,26 +93,35 @@ object KafkaTopic2JMSTextMessage : Spek({
     )
 
     class TrfString : JMSTextMessageWriter<String>(jmsDetails) {
-        override fun transform(event: String): TextMessage = session.createTextMessage().apply {
-            this.text = event.toUpperCase()
-        }
+        override fun transform(event: String): Result =
+                Result(
+                        status = true,
+                        txtMsg = session.createTextMessage().apply { this.text = event.toUpperCase() }
+                )
     }
 
     class TrfInt : JMSTextMessageWriter<Int>(jmsDetails) {
-        override fun transform(event: Int): TextMessage = session.createTextMessage().apply {
-            this.text = (event * event).toString()
-        }
+        override fun transform(event: Int): Result =
+                Result(
+                        status = true,
+                        txtMsg = session.createTextMessage().apply { this.text = (event * event).toString() }
+                )
     }
 
     class TrfAvro : JMSTextMessageWriter<GenericRecord>(jmsDetails) {
-        override fun transform(event: GenericRecord): TextMessage = session.createTextMessage().apply {
-            this.text = event.toString()
-        }
+        override fun transform(event: GenericRecord): Result =
+                Result(
+                        status = true,
+                        txtMsg = session.createTextMessage().apply { this.text = event.toString() }
+                )
     }
 
-    val schemaFile = File("src/main/resources/external_attachment.avsc")
-    val parser = Schema.Parser()
-    val schema = parser.parse(schemaFile)
+    val schema = Schema.Parser().let {
+        it.parse(File("src/main/resources/external_attachment.avsc"))
+    }
+
+    fun getFileAsString(filePath: String) = Files.lines(File(filePath).toPath())
+            .collect(Collectors.joining("\n"))
 
     describe("Kafka topic listener transforming events to jms backend tests") {
 
@@ -125,14 +135,23 @@ object KafkaTopic2JMSTextMessage : Spek({
                 put("archRef","archRef-$it")
             }
         }
+        val dataMusic = (1..5).map {
+            GenericData.Record(schema).apply {
+                put("batch", getFileAsString("src/test/resources/musicCatalog.xml"))
+                put("sc","sc-$it")
+                put("sec","sec-$it")
+                put("archRef","archRef-$it")
+            }
+        }
 
         val waitPatience = 100L
+        val patienceLimit = 7_000L
 
-        context("send ${data.size} string elements to kafka and receive them") {
+        beforeGroup {
+            kEnv.start()
+        }
 
-            beforeGroup {
-                kEnv.start()
-            }
+        context("send string elements to kafka and receive them") {
 
             it("should receive ${data.size} string elements") {
 
@@ -151,11 +170,13 @@ object KafkaTopic2JMSTextMessage : Spek({
                         //kick of asynchronous task for sending data to kafka
                         val producer = KafkaTopicProducer.init<String,String>(kPDetailsStr, "key").produceAsync(data)
 
-                        while (events.size < data.size && (c.status.poll()?.let { it } != Problem))
-                            c.kafkaEvents.receive().also {
-                                events.add(it)
-                                c.commitAction.send(DoCommit)
-                            }
+                        withTimeoutOrNull(patienceLimit) {
+                            while (events.size < data.size && (c.status.poll()?.let { it } != Problem))
+                                c.kafkaEvents.receive().also {
+                                    events.add(it)
+                                    c.commitAction.send(DoCommit)
+                                }
+                        }
 
                         producer.cancelAndJoin()
                         consumer.cancelAndJoin()
@@ -179,33 +200,24 @@ object KafkaTopic2JMSTextMessage : Spek({
 
                         if (c.status.receive() == Problem) return@runBlocking
 
-                        var imPatience = 0
-
-                        while (events.isEmpty() && imPatience < 10) {
-                            c.kafkaEvents.poll()?.let {
-                                events.add(it)
-                                c.commitAction.send(DoCommit)
+                        withTimeoutOrNull(2_000L) {
+                            while (events.isEmpty() && (c.status.poll()?.let { it } != Problem)) {
+                                c.kafkaEvents.poll()?.let {
+                                    events.add(it)
+                                    c.commitAction.send(DoCommit)
+                                }
+                                delay(waitPatience)
                             }
-                            delay(waitPatience)
-                            imPatience++
                         }
+
                         consumer.cancelAndJoin()
                     }
                 }
-
                 events.isEmpty() shouldEqualTo true
-            }
-
-            afterGroup {
-                //kEnv.tearDown()
             }
         }
 
-        context("send ${dataInt.size} integer elements to kafka and receive them") {
-
-            beforeGroup {
-                //kEnv.start()
-            }
+        context("send integer elements to kafka and receive them") {
 
             it("should receive ${dataInt.size} integer elements") {
 
@@ -224,11 +236,13 @@ object KafkaTopic2JMSTextMessage : Spek({
                         //kick of asynchronous task for sending data to kafka
                         val producer = KafkaTopicProducer.init<String,Int>(kPDetailsInt, "key").produceAsync(dataInt)
 
-                        while (events.size < data.size && (c.status.poll()?.let { it } != Problem))
-                            c.kafkaEvents.receive().also {
-                                events.add(it)
-                                c.commitAction.send(DoCommit)
-                            }
+                        withTimeoutOrNull(patienceLimit) {
+                            while (events.size < dataInt.size && (c.status.poll()?.let { it } != Problem))
+                                c.kafkaEvents.receive().also {
+                                    events.add(it)
+                                    c.commitAction.send(DoCommit)
+                                }
+                        }
 
                         producer.cancelAndJoin()
                         consumer.cancelAndJoin()
@@ -252,64 +266,50 @@ object KafkaTopic2JMSTextMessage : Spek({
 
                         if (c.status.receive() == Problem) return@runBlocking
 
-                        var imPatience = 0
-
-                        while (events.isEmpty() && imPatience < 10) {
-                            c.kafkaEvents.poll()?.let {
-                                events.add(it)
-                                c.commitAction.send(DoCommit)
+                        withTimeoutOrNull(2_000L) {
+                            while (events.isEmpty()) {
+                                c.kafkaEvents.poll()?.let {
+                                    events.add(it)
+                                    c.commitAction.send(DoCommit)
+                                }
+                                delay(waitPatience)
                             }
-                            delay(waitPatience)
-                            imPatience++
                         }
                         consumer.cancelAndJoin()
                     }
                 }
-
                 events.isEmpty() shouldEqualTo true
-            }
-
-            afterGroup {
-                //kEnv.tearDown()
             }
         }
 
-        context("basic send ${data.size} string elements, receive, transform, and send to jms") {
-
-            beforeGroup {
-                //kEnv.start()
-            }
+        context("send string elements, receive, transform, and send to jms") {
 
             it("should receive ${data.size} string elements, transformed to uppercase") {
 
                 val manager = ManagePipeline.init<String,String>(kCDetailsStr, TrfString()).manageAsync()
-                val producer = KafkaTopicProducer.init<String,String>(kPDetailsInt, "key").produceAsync(data)
+                val producer = KafkaTopicProducer.init<String,String>(kPDetailsStr, "key").produceAsync(data)
+
+                // helper object to get jms queue size
+
 
                 runBlocking {
 
-                    // helper object to get jms queue size
-                    val queueAsList = EmbeddedActiveMQ(jmsDetails).use {
-                        while (it.queue.size < data.size) delay(waitPatience)
-                        it.queue
+                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+
+                        withTimeoutOrNull(patienceLimit) {
+                            while (eMQ.queue.size < data.size && manager.isActive) delay(waitPatience)
+                        }
+
+                        producer.cancelAndJoin()
+                        manager.cancelAndJoin()
+
+                        eMQ.queue.map { (it as TextMessage).text }
                     }
-
-                    producer.cancelAndJoin()
-                    manager.cancelAndJoin()
-
-                    queueAsList.map { (it as TextMessage).text }
                 } shouldContainAll data.map { it.toUpperCase() }
-            }
-
-            afterGroup {
-                //kEnv.tearDown()
             }
         }
 
-        context("basic send ${dataInt.size} integer elements, receive, transform, and send to jms") {
-
-            beforeGroup {
-                //kEnv.start()
-            }
+        context("send integer elements, receive, transform, and send to jms") {
 
             it("should receive ${dataInt.size} integer elements, transformed to square") {
 
@@ -318,29 +318,22 @@ object KafkaTopic2JMSTextMessage : Spek({
 
                 runBlocking {
 
-                    // helper object to get jms queue size
-                    val queueAsList = EmbeddedActiveMQ(jmsDetails).use {
-                        while (it.queue.size < data.size) delay(waitPatience)
-                        it.queue
+                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+
+                        withTimeoutOrNull(patienceLimit) {
+                            while (eMQ.queue.size < dataInt.size && manager.isActive) delay(waitPatience)
+                        }
+
+                        producer.cancelAndJoin()
+                        manager.cancelAndJoin()
+
+                        eMQ.queue.map { (it as TextMessage).text.toInt() }
                     }
-
-                    producer.cancelAndJoin()
-                    manager.cancelAndJoin()
-
-                    queueAsList.map { (it as TextMessage).text.toInt() }
                 } shouldContainAll dataInt.map { it * it }
-            }
-
-            afterGroup {
-                //kEnv.tearDown()
             }
         }
 
-        context("basic send ${dataAvro.size} avro elements, receive, transform, and send to jms") {
-
-            beforeGroup {
-                //kEnv.start()
-            }
+        context("send avro elements, receive, transform, and send to jms") {
 
             it("should receive ${dataAvro.size} avro elements, transformed to toString") {
 
@@ -351,22 +344,55 @@ object KafkaTopic2JMSTextMessage : Spek({
 
                 runBlocking {
 
-                    // helper object to get jms queue size
-                    val queueAsList = EmbeddedActiveMQ(jmsDetails).use {
-                        while (it.queue.size < data.size) delay(waitPatience)
-                        it.queue
+                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+
+                        withTimeoutOrNull(patienceLimit) {
+                            while (eMQ.queue.size < dataAvro.size && manager.isActive) delay(waitPatience)
+                        }
+
+                        producer.cancelAndJoin()
+                        manager.cancelAndJoin()
+
+                        eMQ.queue.map { (it as TextMessage).text }
                     }
-
-                    producer.cancelAndJoin()
-                    manager.cancelAndJoin()
-
-                    queueAsList.map { (it as TextMessage).text }
                 } shouldContainAll dataAvro.map { it.toString()  }
             }
+        }
 
-            afterGroup {
-                kEnv.tearDown()
+        context("send avro ext. attachment elements, receive, transform, and send to jms") {
+
+            it("should receive ${dataMusic.size} elements, transformed to html") {
+
+                val manager = ManagePipeline.init<String,GenericRecord>(
+                        kCDetailsAvro,
+                        ExternalAttchmentToJMS(
+                                jmsDetails,
+                                "src/test/resources/musicCatalog.xsl"))
+                        .manageAsync()
+
+                val producer = KafkaTopicProducer.init<String,GenericRecord>(
+                        kPDetailsAvro,
+                        "key").produceAsync(dataMusic)
+
+                runBlocking {
+
+                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+
+                        withTimeoutOrNull(patienceLimit) {
+                            while (eMQ.queue.size < dataMusic.size && manager.isActive) delay(waitPatience)
+                        }
+
+                        producer.cancelAndJoin()
+                        manager.cancelAndJoin()
+
+                        eMQ.queue.size
+                    }
+                } shouldEqualTo  dataMusic.size
             }
+        }
+
+        afterGroup {
+            kEnv.tearDown()
         }
     }
 })

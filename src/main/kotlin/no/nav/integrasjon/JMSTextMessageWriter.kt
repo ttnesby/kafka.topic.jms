@@ -20,6 +20,8 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
             throw IllegalStateException("Cannot create session in JMSTextMessageWriter!")
     private val producer = session.createProducer(session.createQueue(jmsDetails.queueName))
 
+    data class Result(val status: Boolean = false, val txtMsg: TextMessage)
+
     fun writeAsync(
             data: ReceiveChannel<V>,
             commitAction: SendChannel<CommitAction>,
@@ -38,10 +40,25 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
 
                     data.receive().also { e ->
                         try {
-                            producer.send(transform(e))
-                            log.debug {"SENT to jms!" }
-                            commitAction.send(DoCommit)
-                            log.debug {"SENT DoCommit!"}
+                            log.debug {"Received event: ${e.toString()}" }
+
+                            val result = transform(e)
+
+                            when(result.status) {
+                                true -> {
+                                    log.debug {"Transformation ok: ${result.txtMsg}" }
+                                    producer.send(result.txtMsg)
+                                    log.debug {"Sent and received on JMS" }
+                                    commitAction.send(DoCommit)
+                                    log.debug {"Sent DoCommit to pipeline"}
+                                }
+                                else -> {
+                                    log.debug {"Transformation failure!" }
+                                    allGood = false
+                                    commitAction.send(NoCommit)
+                                    log.error("Sent NoCommit to pipeline")
+                                }
+                            }
                         }
                         catch (e: Exception) {
                             // MessageFormatException, UnsupportedOperationException
@@ -49,7 +66,7 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
                             allGood = false
                             commitAction.send(NoCommit)
                             log.error("Exception", e)
-                            log.error("SENT NoCommit!")
+                            log.error("Sent NoCommit to pipeline")
                         }
                     }
                 }
@@ -63,14 +80,17 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
         } // JMSSecurityException, JMSException, ClosedReceiveChannelException
 
         // notify manager if this job is still active
-        if (isActive && !status.isClosedForSend) status.send(Problem)
+        if (isActive && !status.isClosedForSend) {
+            status.send(Problem)
+            log.error("Reported problem to manager")
+        }
 
         log.info("@end of writeAsync - goodbye!")
     }
 
-    abstract fun transform(event: V): TextMessage
+    abstract fun transform(event: V): Result
 
     companion object {
-        private val log = KotlinLogging.logger {  }
+        val log = KotlinLogging.logger {  }
     }
 }
