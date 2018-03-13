@@ -10,15 +10,17 @@ class ExternalAttchmentToJMS(
         xsltFilePath: String) : JMSTextMessageWriter<GenericRecord>(jmsDetails) {
 
     private val tFactory = TransformerFactory.newInstance()
-    private val transformer = tFactory.newTransformer(
+    private val xslt = tFactory.newTransformer(
             javax.xml.transform.stream.StreamSource(xsltFilePath))
 
     override fun transform(event: GenericRecord): Result {
 
+        //xslt.setParameter("formDataCD","test")
+
         val resultWriter = StringWriter()
 
         return try {
-            transformer.transform(
+            xslt.transform(
                 javax.xml.transform.stream.StreamSource(StringReader(event["batch"].toString())),
                 javax.xml.transform.stream.StreamResult(resultWriter))
             Result(
