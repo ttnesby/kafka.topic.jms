@@ -52,7 +52,6 @@ dependencies {
     implementation "ch.qos.logback:logback-classic:1.2.3"
     implementation "org.slf4j:log4j-over-slf4j:1.7.25"
     implementation "org.apache.activemq:activemq-all:$active_mq_version"
-    implementation "org.redundent:kotlin-xml-builder:1.4"
 
     //testImplementation "org.apache.activemq:artemis-jms-client-all:$active_mq_version"
     //testImplementation "org.apache.activemq:artemis-jms-server:$active_mq_version"

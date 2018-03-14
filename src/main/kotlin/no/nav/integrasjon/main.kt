@@ -15,24 +15,44 @@ import no.nav.common.KafkaEnvironment
 import org.apache.activemq.ActiveMQConnectionFactory
 import org.apache.avro.generic.GenericRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.redundent.kotlin.xml.xml
-import java.io.File
 import java.io.StringReader
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.text.SimpleDateFormat
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
 import java.util.*
-import java.util.UUID.randomUUID
 import javax.jms.ConnectionFactory
-import javax.xml.parsers.DocumentBuilderFactory
 import javax.xml.stream.XMLInputFactory
+import javax.xml.stream.XMLStreamReader
 import javax.xml.stream.events.XMLEvent
 
 fun main(args: Array<String>) {
 
+    fun getElems(xmlFile: String, elems: List<String>): List<String> {
+
+        val xmlReader = XMLInputFactory.newFactory().createXMLStreamReader(
+                StringReader(String(Files.readAllBytes(Paths.get(xmlFile)),StandardCharsets.UTF_8)))
+
+        tailrec fun iter(xmlReader: XMLStreamReader, elem: String): String =
+
+            if (!xmlReader.hasNext())
+                ""
+            else {
+                xmlReader.next()
+
+                if (xmlReader.eventType == XMLEvent.START_ELEMENT && xmlReader.localName == elem)
+                        xmlReader.run {
+                            next()
+                            text
+                        }
+                else
+                    iter(xmlReader, elem)
+            }
+
+        return elems.map { iter(xmlReader,it) }
+    }
+
+    println(getElems("src/test/resources/oppf_2913_04.xml",listOf("ServiceCode","Reference")))
+/*
     val bytes = Files.readAllBytes(Paths.get("src/test/resources/oppf_2913_04.xml"))
     val toStr = String(bytes,StandardCharsets.UTF_8)
 
@@ -83,46 +103,50 @@ fun main(args: Array<String>) {
     println(reference)
     println(formData)
 
-    val cdt = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"))
+    val bytes2 = Files.readAllBytes(Paths.get("src/test/resources/oppf_2913_04_inner.xml"))
+    //val toStr2 = String(bytes2,StandardCharsets.UTF_8)
 
-    val eiFellesFormat = xml("EI_fellesformat",prettyFormat = true) {
-        xmlns="http://www.nav.no/xml/eiff/2/"
-        namespace("xsi","http://www.w3.org/2001/XMLSchema-instance")
+    val reader2 = StringReader(String(bytes2,StandardCharsets.UTF_8))
+    val xmlReader2 = XMLInputFactory.newFactory().createXMLStreamReader(reader2)
 
-        "NavInnDokument" {
-            xmlns="http://www.nav.no/xml/NavDokument/1/"
+    var orgCode: String = ""
 
-            "DokumentInfo" {
-                "dokumentType" {
-                    -serviceCode
-                }
-                "dokumentreferanse" {
-                    -reference
-                }
-                "dokumentDato" {
-                    -cdt
-                }
-            }
-            "Avsender" {
-                "id" {
-                    "idNr" {
-                        -"tbd"
-                    }
-                    "idType" {
-                        -"ENH"
+    xmlReader2.apply {
+
+        while (hasNext() && orgCode.isEmpty()) {
+
+            next()
+
+            when (eventType) {
+                XMLEvent.START_ELEMENT -> when (localName) {
+                    "orgnr" -> {
+                        next()
+                        orgCode = text
+                        next()
                     }
                 }
             }
-            "Godkjenner" {}
-            "Innhold" {}
         }
-        "MottakenhetBlokk" {
-            attribute("name","ediLoggId")
-            -randomUUID().toString()
+
+    }.also { it.close() }
+*/
+/*    while (xmlReader2.hasNext() && orgCode.isEmpty()) {
+
+        xmlReader2.next()
+
+        when (xmlReader2.eventType) {
+            XMLEvent.START_ELEMENT -> when (xmlReader2.localName) {
+                "orgnr" -> {
+                    xmlReader2.next()
+                    orgCode = xmlReader2.text
+                    xmlReader2.next()
+                }
+            }
         }
     }
 
-    println(eiFellesFormat.toString())
+    xmlReader2.close()*/
+    //println(orgCode)
 
 
 }
