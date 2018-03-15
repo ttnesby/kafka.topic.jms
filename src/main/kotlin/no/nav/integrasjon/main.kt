@@ -27,12 +27,27 @@ import javax.xml.stream.events.XMLEvent
 
 fun main(args: Array<String>) {
 
-    fun getElems(xmlFile: String, elems: List<String>): List<String> {
+    fun getElems(xmlFile: String, elems: Map<String, Int>): List<String> {
 
         val xmlReader = XMLInputFactory.newFactory().createXMLStreamReader(
                 StringReader(String(Files.readAllBytes(Paths.get(xmlFile)),StandardCharsets.UTF_8)))
 
-        tailrec fun iter(xmlReader: XMLStreamReader, elem: String): String =
+        var strBuilder = StringBuilder()
+
+        tailrec fun iterCDATA(xmlReader: XMLStreamReader): String =
+                if (!xmlReader.hasNext())
+                    ""
+                else {
+                    xmlReader.next()
+                    if (xmlReader.eventType == XMLEvent.END_ELEMENT)
+                        strBuilder.toString().trim().dropLast(3)
+                    else {
+                        strBuilder.append(xmlReader.text)
+                        iterCDATA(xmlReader)
+                    }
+                }
+
+        tailrec fun iterElem(xmlReader: XMLStreamReader, elem: String, type: Int): String =
 
             if (!xmlReader.hasNext())
                 ""
@@ -40,18 +55,30 @@ fun main(args: Array<String>) {
                 xmlReader.next()
 
                 if (xmlReader.eventType == XMLEvent.START_ELEMENT && xmlReader.localName == elem)
-                        xmlReader.run {
-                            next()
-                            text
-                        }
+                    if (type == XMLEvent.START_ELEMENT) {
+                        xmlReader.next()
+                        xmlReader.text
+                    }
+                    else iterCDATA(xmlReader)
+
                 else
-                    iter(xmlReader, elem)
+                    iterElem(xmlReader, elem, type)
             }
 
-        return elems.map { iter(xmlReader,it) }
+        return elems.map { iterElem(xmlReader,it.key,it.value) }
     }
 
-    println(getElems("src/test/resources/oppf_2913_04.xml",listOf("ServiceCode","Reference")))
+    println(
+            getElems(
+                    "src/test/resources/oppf_2913_04.xml",
+                    mapOf(
+                            "ServiceCode" to XMLEvent.START_ELEMENT,
+                            "Reference" to XMLEvent.START_ELEMENT,
+                            "FormData" to XMLEvent.CDATA)
+                    )
+    )
+    
+
 /*
     val bytes = Files.readAllBytes(Paths.get("src/test/resources/oppf_2913_04.xml"))
     val toStr = String(bytes,StandardCharsets.UTF_8)
