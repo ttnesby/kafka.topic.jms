@@ -25,29 +25,26 @@ import javax.xml.stream.XMLInputFactory
 import javax.xml.stream.XMLStreamReader
 import javax.xml.stream.events.XMLEvent
 
-fun main(args: Array<String>) {
+fun getElems(xmlFile: String, elems: Map<String, Int>): List<String> {
 
-    fun getElems(xmlFile: String, elems: Map<String, Int>): List<String> {
+    val xmlReader = XMLInputFactory.newFactory().createXMLStreamReader(StringReader(xmlFile))
 
-        val xmlReader = XMLInputFactory.newFactory().createXMLStreamReader(
-                StringReader(String(Files.readAllBytes(Paths.get(xmlFile)),StandardCharsets.UTF_8)))
+    var strBuilder = StringBuilder()
 
-        var strBuilder = StringBuilder()
-
-        tailrec fun iterCDATA(xmlReader: XMLStreamReader): String =
-                if (!xmlReader.hasNext())
-                    ""
+    tailrec fun iterCDATA(xmlReader: XMLStreamReader): String =
+            if (!xmlReader.hasNext())
+                ""
+            else {
+                xmlReader.next()
+                if (xmlReader.eventType == XMLEvent.END_ELEMENT)
+                    strBuilder.toString().trim().dropLast(3)
                 else {
-                    xmlReader.next()
-                    if (xmlReader.eventType == XMLEvent.END_ELEMENT)
-                        strBuilder.toString().trim().dropLast(3)
-                    else {
-                        strBuilder.append(xmlReader.text)
-                        iterCDATA(xmlReader)
-                    }
+                    strBuilder.append(xmlReader.text)
+                    iterCDATA(xmlReader)
                 }
+            }
 
-        tailrec fun iterElem(xmlReader: XMLStreamReader, elem: String, type: Int): String =
+    tailrec fun iterElem(xmlReader: XMLStreamReader, elem: String, type: Int): String =
 
             if (!xmlReader.hasNext())
                 ""
@@ -65,115 +62,25 @@ fun main(args: Array<String>) {
                     iterElem(xmlReader, elem, type)
             }
 
-        return elems.map { iterElem(xmlReader,it.key,it.value) }
-    }
+    return elems.map { iterElem(xmlReader,it.key,it.value) }
+}
 
-    println(
-            getElems(
-                    "src/test/resources/oppf_2913_04.xml",
-                    mapOf(
-                            "ServiceCode" to XMLEvent.START_ELEMENT,
-                            "Reference" to XMLEvent.START_ELEMENT,
-                            "FormData" to XMLEvent.CDATA)
-                    )
+fun main(args: Array<String>) {
+
+    val xmlFile = String(
+            Files.readAllBytes(Paths.get("src/test/resources/oppf_2913_04.xml")),
+            StandardCharsets.UTF_8
     )
-    
 
-/*
-    val bytes = Files.readAllBytes(Paths.get("src/test/resources/oppf_2913_04.xml"))
-    val toStr = String(bytes,StandardCharsets.UTF_8)
+    val values = getElems(
+            xmlFile,
+            mapOf(
+                    "ServiceCode" to XMLEvent.START_ELEMENT,
+                    "Reference" to XMLEvent.START_ELEMENT,
+                    "FormData" to XMLEvent.CDATA)
+    )
 
-    val reader = StringReader(toStr)
-    val xmlReader = XMLInputFactory.newFactory().createXMLStreamReader(reader)
-
-    var serviceCode: String = ""
-    var reference: String = ""
-    var formData: String = ""
-    var strBuilder = StringBuilder()
-
-    while (xmlReader.hasNext() && (serviceCode.isEmpty() || reference.isEmpty() || formData.isEmpty())) {
-
-        xmlReader.next()
-
-        when (xmlReader.eventType) {
-            XMLEvent.START_ELEMENT -> when (xmlReader.localName) {
-                "ServiceCode" -> {
-                    xmlReader.next()
-                    serviceCode = xmlReader.text
-                    xmlReader.next()
-                }
-                "Reference" -> {
-                    xmlReader.next()
-                    reference = xmlReader.text
-                    xmlReader.next()
-                }
-                "FormData" -> {
-                    while (xmlReader.hasNext() && formData.isEmpty()) {
-                        xmlReader.next()
-                        when (xmlReader.eventType) {
-                            XMLEvent.CHARACTERS -> strBuilder.append(xmlReader.text)
-                            XMLEvent.CDATA -> strBuilder.append(xmlReader.text)
-                            XMLEvent.END_ELEMENT -> {
-                                formData = strBuilder.toString().trim().dropLast(3)
-                            }
-                        }
-                    }
-                    xmlReader.next()
-                }
-            }
-        }
-    }
-
-    xmlReader.close()
-
-    println(serviceCode)
-    println(reference)
-    println(formData)
-
-    val bytes2 = Files.readAllBytes(Paths.get("src/test/resources/oppf_2913_04_inner.xml"))
-    //val toStr2 = String(bytes2,StandardCharsets.UTF_8)
-
-    val reader2 = StringReader(String(bytes2,StandardCharsets.UTF_8))
-    val xmlReader2 = XMLInputFactory.newFactory().createXMLStreamReader(reader2)
-
-    var orgCode: String = ""
-
-    xmlReader2.apply {
-
-        while (hasNext() && orgCode.isEmpty()) {
-
-            next()
-
-            when (eventType) {
-                XMLEvent.START_ELEMENT -> when (localName) {
-                    "orgnr" -> {
-                        next()
-                        orgCode = text
-                        next()
-                    }
-                }
-            }
-        }
-
-    }.also { it.close() }
-*/
-/*    while (xmlReader2.hasNext() && orgCode.isEmpty()) {
-
-        xmlReader2.next()
-
-        when (xmlReader2.eventType) {
-            XMLEvent.START_ELEMENT -> when (xmlReader2.localName) {
-                "orgnr" -> {
-                    xmlReader2.next()
-                    orgCode = xmlReader2.text
-                    xmlReader2.next()
-                }
-            }
-        }
-    }
-
-    xmlReader2.close()*/
-    //println(orgCode)
+    println(getElems(values[2], mapOf("orgnr" to XMLEvent.START_ELEMENT)).first())
 
 
 }
