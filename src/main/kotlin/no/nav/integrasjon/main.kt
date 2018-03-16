@@ -25,45 +25,7 @@ import javax.xml.stream.XMLInputFactory
 import javax.xml.stream.XMLStreamReader
 import javax.xml.stream.events.XMLEvent
 
-fun getElems(xmlFile: String, elems: Map<String, Int>): List<String> {
 
-    val xmlReader = XMLInputFactory.newFactory().createXMLStreamReader(StringReader(xmlFile))
-
-    var strBuilder = StringBuilder()
-
-    tailrec fun iterCDATA(xmlReader: XMLStreamReader): String =
-            if (!xmlReader.hasNext())
-                ""
-            else {
-                xmlReader.next()
-                if (xmlReader.eventType == XMLEvent.END_ELEMENT)
-                    strBuilder.toString().trim().dropLast(3)
-                else {
-                    strBuilder.append(xmlReader.text)
-                    iterCDATA(xmlReader)
-                }
-            }
-
-    tailrec fun iterElem(xmlReader: XMLStreamReader, elem: String, type: Int): String =
-
-            if (!xmlReader.hasNext())
-                ""
-            else {
-                xmlReader.next()
-
-                if (xmlReader.eventType == XMLEvent.START_ELEMENT && xmlReader.localName == elem)
-                    if (type == XMLEvent.START_ELEMENT) {
-                        xmlReader.next()
-                        xmlReader.text
-                    }
-                    else iterCDATA(xmlReader)
-
-                else
-                    iterElem(xmlReader, elem, type)
-            }
-
-    return elems.map { iterElem(xmlReader,it.key,it.value) }
-}
 
 fun main(args: Array<String>) {
 
