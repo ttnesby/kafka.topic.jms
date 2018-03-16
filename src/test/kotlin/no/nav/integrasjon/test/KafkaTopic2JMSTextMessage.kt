@@ -233,7 +233,7 @@ object KafkaTopic2JMSTextMessage : Spek({
                 },
                 GenericData.Record(schema).apply {
                     put("batch", getFileAsString("src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml"))
-                    put("sc","navoppfplan")
+                    put("sc","NavOppfPlan")
                     put("sec","rapportering_sykemeldte")
                     put("archRef","test")
                 }
