@@ -12,7 +12,7 @@ object XCDATA : XMLType()
 
 /**
  * This class is a sax parser restricted to Altinn ReceiveOnlineBatchExternalAttachment ONLY
- * Limited to certain use cases
+ * Limited to certain NAV use cases in context of fixed set of events from kafka to JMS messages
  */
 class XMLExtractor(xmlFile: String) {
 

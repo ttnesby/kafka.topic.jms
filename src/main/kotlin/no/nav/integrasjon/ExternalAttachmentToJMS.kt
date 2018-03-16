@@ -5,17 +5,31 @@ import java.io.StringReader
 import java.io.StringWriter
 import javax.xml.transform.TransformerFactory
 
-class ExternalAttchmentToJMS(
+
+class ExternalAttachmentToJMS(
         jmsDetails: JMSDetails,
         xsltFilePath: String) : JMSTextMessageWriter<GenericRecord>(jmsDetails) {
 
-    private val tFactory = TransformerFactory.newInstance()
-    private val xslt = tFactory.newTransformer(
+    //Substituted TransformerFactory.newInstance() with saxon version 2 and 3
+    private val xFactory = net.sf.saxon.TransformerFactoryImpl()
+    private val xslt = xFactory.newTransformer(
             javax.xml.transform.stream.StreamSource(xsltFilePath))
 
     override fun transform(event: GenericRecord): Result {
 
-        //xslt.setParameter("formDataCD","test")
+        val xe = XMLExtractor(event["batch"].toString())
+
+        // prepare for parameters to the xsl document, programmatic is easier than xls...
+        xslt.apply {
+            setParameter("ServiceCode", xe.serviceCode)
+            setParameter("Reference", xe.reference)
+            setParameter("FormData", xe.formData)
+            setParameter("ArchiveReference", xe.attachment.archiveReference)
+            setParameter("FileName", xe.attachment.fileName)
+            setParameter("FileContent", xe.attachment.fileContent)
+            setParameter("OrgNo", xe.orgNo)
+            setParameter("Guuid", java.util.UUID.randomUUID().toString())
+        }
 
         val resultWriter = StringWriter()
 

@@ -11,7 +11,6 @@ import io.ktor.server.netty.Netty
 import kotlinx.coroutines.experimental.cancelAndJoin
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
-import no.nav.common.KafkaEnvironment
 import org.apache.activemq.ActiveMQConnectionFactory
 import org.apache.avro.generic.GenericRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -26,18 +25,20 @@ fun main(args: Array<String>) {
 
 fun bootstrap() {
 
+/*
     val kEnv = KafkaEnvironment(topics = listOf("aTopic"), withSchemaRegistry = true).apply {
         start()
     }
+*/
 
-    val kCDetailsAvro = KafkaClientDetails(
+/*    val kCDetailsAvro = KafkaClientDetails(
             Properties().apply {
                 set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
                 set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
                 set("schema.registry.url",kEnv.serverPark.schemaregistry.url)
             },
             "aTopic"
-    )
+    )*/
 
     val jmsDetails = JMSDetails(
             ActiveMQConnectionFactory("vm://localhost?broker.persistent=false") as ConnectionFactory,
@@ -45,12 +46,14 @@ fun bootstrap() {
     )
 
 
+/*
     val manager = ManagePipeline.init<String, GenericRecord>(
             kCDetailsAvro,
-            ExternalAttchmentToJMS(
+            ExternalAttachmentToJMS(
                     jmsDetails,
                     "src/test/resources/musicCatalog.xsl"))
             .manageAsync()
+*/
 
 
     val eREST = embeddedServer(Netty, 8080) {
@@ -75,9 +78,9 @@ fun bootstrap() {
     runBlocking {
 
         println("Waiting for problem with kafka-topic-jms pipeline or NAIS REST server")
-        while (manager.isActive && eRIsActive) delay(100)
+/*        while (manager.isActive && eRIsActive) delay(100)
 
         manager.cancelAndJoin()
-        kEnv.tearDown()
+        kEnv.tearDown()*/
     }
 }

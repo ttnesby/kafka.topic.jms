@@ -1,12 +1,10 @@
 package no.nav.integrasjon.test
 
 import kotlinx.coroutines.experimental.*
-import mu.KotlinLogging
 import no.nav.common.KafkaEnvironment
 import no.nav.integrasjon.*
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import no.nav.integrasjon.test.utils.KafkaTopicProducer
-import org.amshove.kluent.`should be equal to`
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldContainAll
 import org.amshove.kluent.shouldEqualTo
@@ -117,9 +115,7 @@ object KafkaTopic2JMSTextMessage : Spek({
                 )
     }
 
-    val schema = Schema.Parser().let {
-        it.parse(File("src/main/resources/external_attachment.avsc"))
-    }
+    val schema = Schema.Parser().parse(File("src/main/resources/external_attachment.avsc"))
 
     fun getFileAsString(filePath: String) = Files.lines(File(filePath).toPath())
             .collect(Collectors.joining("\n"))
@@ -215,6 +211,33 @@ object KafkaTopic2JMSTextMessage : Spek({
                 put("archRef","archRef-$it")
             }
         }
+
+        val dataEia = mutableListOf<GenericRecord>(
+                GenericData.Record(schema).apply {
+                    put("batch", getFileAsString("src/test/resources/oppfolging_2913_02.xml"))
+                    put("sc","2913")
+                    put("sec","2")
+                    put("archRef","test")
+                },
+                GenericData.Record(schema).apply {
+                    put("batch", getFileAsString("src/test/resources/oppfolging_2913_03.xml"))
+                    put("sc","2913")
+                    put("sec","3")
+                    put("archRef","test")
+                },
+                GenericData.Record(schema).apply {
+                    put("batch", getFileAsString("src/test/resources/oppfolging_2913_04.xml"))
+                    put("sc","2913")
+                    put("sec","4")
+                    put("archRef","test")
+                },
+                GenericData.Record(schema).apply {
+                    put("batch", getFileAsString("src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml"))
+                    put("sc","navoppfplan")
+                    put("sec","rapportering_sykemeldte")
+                    put("archRef","test")
+                }
+        )
 
         val waitPatience = 100L
         val patienceLimit = 7_000L
@@ -437,7 +460,7 @@ object KafkaTopic2JMSTextMessage : Spek({
 
                 val manager = ManagePipeline.init<String,GenericRecord>(
                         kCDetailsAvro,
-                        ExternalAttchmentToJMS(
+                        ExternalAttachmentToJMS(
                                 jmsDetails,
                                 "src/test/resources/musicCatalog.xsl"))
                         .manageAsync()
@@ -460,6 +483,39 @@ object KafkaTopic2JMSTextMessage : Spek({
                         eMQ.queue.size
                     }
                 } shouldEqualTo  dataMusic.size
+            }
+        }
+
+        context("send 2913-2,3,4 + navoppfplan avro ext. attachment elements, receive, transform " +
+                "and send to jms") {
+
+            it("should receive ${dataEia.size} elements, transformed to xml") {
+
+                val manager = ManagePipeline.init<String,GenericRecord>(
+                        kCDetailsAvro,
+                        ExternalAttachmentToJMS(
+                                jmsDetails,
+                                "src/main/resources/oppfolgingsplan2018_03_16.xsl"))
+                        .manageAsync()
+
+                val producer = KafkaTopicProducer.init<String,GenericRecord>(
+                        kPDetailsAvro,
+                        "key").produceAsync(dataEia)
+
+                runBlocking {
+
+                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+
+                        withTimeoutOrNull(patienceLimit) {
+                            while (eMQ.queue.size < dataMusic.size && manager.isActive) delay(waitPatience)
+                        }
+
+                        producer.cancelAndJoin()
+                        manager.cancelAndJoin()
+
+                        eMQ.queue.size
+                    }
+                } shouldEqualTo  dataEia.size
             }
         }
 
