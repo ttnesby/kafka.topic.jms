@@ -15,34 +15,11 @@ import no.nav.common.KafkaEnvironment
 import org.apache.activemq.ActiveMQConnectionFactory
 import org.apache.avro.generic.GenericRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import java.io.StringReader
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Paths
 import java.util.*
 import javax.jms.ConnectionFactory
-import javax.xml.stream.XMLInputFactory
-import javax.xml.stream.XMLStreamReader
-import javax.xml.stream.events.XMLEvent
-
 
 
 fun main(args: Array<String>) {
-
-    val xmlFile = String(
-            Files.readAllBytes(Paths.get("src/test/resources/oppf_2913_04.xml")),
-            StandardCharsets.UTF_8
-    )
-
-    val values = getElems(
-            xmlFile,
-            mapOf(
-                    "ServiceCode" to XMLEvent.START_ELEMENT,
-                    "Reference" to XMLEvent.START_ELEMENT,
-                    "FormData" to XMLEvent.CDATA)
-    )
-
-    println(getElems(values[2], mapOf("orgnr" to XMLEvent.START_ELEMENT)).first())
 
 
 }

@@ -6,6 +6,8 @@ import no.nav.common.KafkaEnvironment
 import no.nav.integrasjon.*
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import no.nav.integrasjon.test.utils.KafkaTopicProducer
+import org.amshove.kluent.`should be equal to`
+import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldContainAll
 import org.amshove.kluent.shouldEqualTo
 import org.apache.activemq.ActiveMQConnectionFactory
@@ -15,12 +17,11 @@ import org.apache.avro.generic.GenericRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.jetbrains.spek.api.Spek
-import org.jetbrains.spek.api.dsl.context
-import org.jetbrains.spek.api.dsl.describe
-import org.jetbrains.spek.api.dsl.it
-import org.jetbrains.spek.api.dsl.xcontext
+import org.jetbrains.spek.api.dsl.*
 import java.io.File
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.Paths
 import java.util.*
 import java.util.stream.Collectors
 import javax.jms.TextMessage
@@ -122,6 +123,77 @@ object KafkaTopic2JMSTextMessage : Spek({
 
     fun getFileAsString(filePath: String) = Files.lines(File(filePath).toPath())
             .collect(Collectors.joining("\n"))
+
+    describe("XMLExtractor tests") {
+
+        context("oppfolging tests") {
+
+            it("2913_04 should contain non-empty ServiceCode, Reference, FormData and OrgNo") {
+
+                val xmlFile = String(
+                        Files.readAllBytes(Paths.get("src/test/resources/oppfolging_2913_04.xml")),
+                        StandardCharsets.UTF_8
+                )
+
+                val ex = XMLExtractor(xmlFile)
+
+                ex.serviceCode shouldBeEqualTo "2913"
+                ex.reference shouldBeEqualTo "77423963"
+                ex.formData.isNotEmpty() shouldEqualTo true
+                ex.orgNo shouldBeEqualTo "973094718"
+            }
+
+            it("2913_03 should contain non-empty ServiceCode, Reference, FormData and OrgNo") {
+
+                val xmlFile = String(
+                        Files.readAllBytes(Paths.get("src/test/resources/oppfolging_2913_03.xml")),
+                        StandardCharsets.UTF_8
+                )
+
+                val ex = XMLExtractor(xmlFile)
+
+                ex.serviceCode shouldBeEqualTo "2913"
+                ex.reference shouldBeEqualTo "77423963"
+                ex.formData.isNotEmpty() shouldEqualTo true
+                ex.orgNo shouldBeEqualTo "987654321"
+            }
+
+            it("2913_02 should contain non-empty ServiceCode, Reference, FormData and OrgNo") {
+
+                val xmlFile = String(
+                        Files.readAllBytes(Paths.get("src/test/resources/oppfolging_2913_02.xml")),
+                        StandardCharsets.UTF_8
+                )
+
+                val ex = XMLExtractor(xmlFile)
+
+                ex.serviceCode shouldBeEqualTo "2913"
+                ex.reference shouldBeEqualTo "77426094"
+                ex.formData.isNotEmpty() shouldEqualTo true
+                ex.orgNo shouldBeEqualTo "973123456"
+            }
+
+            it("navoppfplan_... should contain non-empty ServiceCode, Reference, FormData, OrgNo and attachment") {
+
+                val xmlFile = String(
+                        Files.readAllBytes(Paths.get("src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml")),
+                        StandardCharsets.UTF_8
+                )
+
+                val ex = XMLExtractor(xmlFile)
+
+                ex.serviceCode shouldBeEqualTo "NavOppfPlan"
+                ex.reference shouldBeEqualTo "rapportering-sykmeldte"
+                ex.formData.isNotEmpty() shouldEqualTo true
+                ex.attachment.archiveReference shouldBeEqualTo "170314125626-974114127"
+                ex.attachment.fileName shouldBeEqualTo "20170314114144191.pdf"
+                ex.attachment.fileContent.isNotEmpty() shouldEqualTo true
+                ex.orgNo shouldBeEqualTo "90012345"
+            }
+
+        }
+
+    }
 
     describe("Kafka topic listener transforming events to jms backend tests") {
 
