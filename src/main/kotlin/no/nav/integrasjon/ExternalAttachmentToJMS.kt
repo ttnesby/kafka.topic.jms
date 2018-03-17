@@ -16,7 +16,7 @@ class ExternalAttachmentToJMS(
 
     override fun transform(event: GenericRecord): Result {
 
-        if (event["sc"].toString() in listOf("2913","NavOppfPlan")) {
+        if (event["sc"].toString() in listOf("2913","2896","NavOppfPlan")) {
 
             val xe = XMLExtractor(event["batch"].toString())
 

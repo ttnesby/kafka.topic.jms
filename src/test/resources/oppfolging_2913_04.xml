@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DataBatch schemaVersion="1.0" batchReference="85385" previousReference="85383" receiverReference="eb871dd9-cd60-4af5-9658-b9e3ffb5cae1" timeStamp="2017-03-14T12:52:40" formTasksInBatch="1">
+    <DataUnits>
+        <DataUnit reportee="923475230" archiveReference="AR387469726" archiveTimeStamp="2017-03-14T12:52:40.06">
+            <FormTask>
+                <ServiceCode>2913</ServiceCode>
+                <ServiceEditionCode>4</ServiceEditionCode>
+                <Form>
+                    <DataFormatId>3521</DataFormatId>
+                    <DataFormatVersion>37865</DataFormatVersion>
+                    <Reference>77423963</Reference>
+                    <ParentReference>0</ParentReference>
+                    <FormData>
+                        <![CDATA[
+											<ns4:melding xmlns:ns4="http://seres.no/xsd/NAV/Oppfoelgingsplan4_utfyllende_info_M/2016" xmlns:kodebib="http://kodebibliotek.brreg.no/xsd/kodebibliotek" xmlns:my="http://schemas.microsoft.com/office/infopath/2003/myXSD/2011-11-08T11:06:24" xmlns:ns1="http://seres.no/xsd/NAV/Oppfølgingsplan_M/2011" xmlns:ns2="http://seres.no/xsd/NAV/Oppfølgingsplan_M/2012" xmlns:ns3="http://seres.no/xsd/NAV/Oppfølgingsplan2_M/2012" xmlns:seres="http://seres.no/xsd/forvaltningsdata" xmlns:xd="http://schemas.microsoft.com/office/infopath/2003">
+        	<ns4:Skjemainnhold>
+					<ns4:arbeidsgiver>
+						<ns4:annenKontaktpersonEtternavn>Etternavn</ns4:annenKontaktpersonEtternavn>
+						<ns4:telefonNaermesteLeder>12345678</ns4:telefonNaermesteLeder>
+						<ns4:naermesteLederFornavn>Fornavn</ns4:naermesteLederFornavn>
+						<ns4:orgnr>987654321</ns4:orgnr>
+						<ns4:orgnavn>Harry Belafonte</ns4:orgnavn>
+						<ns4:virksomhetErIABedrift>true</ns4:virksomhetErIABedrift>
+						<ns4:telefonKontaktperson>12345678</ns4:telefonKontaktperson>
+						<ns4:naermesteLederEtternavn>Belafonte</ns4:naermesteLederEtternavn>
+						<ns4:annenKontaktpersonFornavn>Harry</ns4:annenKontaktpersonFornavn>
+					</ns4:arbeidsgiver>
+					<ns4:sykmeldtArbeidstaker>
+						<ns4:fnr>01010112345</ns4:fnr>
+						<ns4:etternavn>Navnesen</ns4:etternavn>
+						<ns4:fornavn>Forste</ns4:fornavn>
+					</ns4:sykmeldtArbeidstaker>
+					<ns4:sykefravaerForSykmeldtArbeidstaker>
+						<ns4:foersteFravaersdag>2013-11-11</ns4:foersteFravaersdag>
+						<ns4:sykmeldingsdato>2013-11-11</ns4:sykmeldingsdato>
+					</ns4:sykefravaerForSykmeldtArbeidstaker>
+					<ns4:avsenderSystem>
+						<ns4:systemNavn>XRay</ns4:systemNavn>
+						<ns4:systemVersjon>x2.A.2</ns4:systemVersjon>
+					</ns4:avsenderSystem>
+					<ns4:tiltak>
+						<ns4:tiltaksinformasjon>
+							<ns4:bistandAndre>false</ns4:bistandAndre>
+							<ns4:bistandHjelpemidler>false</ns4:bistandHjelpemidler>
+							<ns4:tidsrom>
+								<ns4:periodeFra>2014-12-30</ns4:periodeFra>
+								<ns4:periodeTil>2015-01-13</ns4:periodeTil>
+							</ns4:tidsrom>
+							<ns4:maalMedTiltaket>
+								Navn har vært 100% sykmeldt i 2 uker nå.
+								Vi har snakket sammen om det er mulig å utføre noen arbeidsoppgaver.
+							</ns4:maalMedTiltaket>
+							<ns4:beskrivelseAvTiltaket>Navn har fått en avtale med en spesialist den 9. Januar.
+							Etter den datoen får han vite mer om behandlingen han skal få og sannsynligvis vet han da også litt mer om hvor lang tid dette kan ta.
+							</ns4:beskrivelseAvTiltaket>
+							<ns4:bistandRaadOgVeiledning>false</ns4:bistandRaadOgVeiledning>
+							<ns4:bistandDialogMoeteMedNav>false</ns4:bistandDialogMoeteMedNav>
+							<ns4:bistandArbeidsrettedeTiltakOgVirkemidler>false</ns4:bistandArbeidsrettedeTiltakOgVirkemidler>
+							<ns4:bistandBedriftshelsetjenesten>false</ns4:bistandBedriftshelsetjenesten>
+							<ns4:vurderingAvTiltak>Vi kan ikke gjøre noe mer enn å avvente behandlingen på sykehuset.</ns4:vurderingAvTiltak>
+						</ns4:tiltaksinformasjon>
+					</ns4:tiltak>
+					<ns4:mottaksInformasjon>
+						<ns4:endringsDato>2013-06-24</ns4:endringsDato>
+						<ns4:oppfolgingsplanSendesTiNav>true</ns4:oppfolgingsplanSendesTiNav>
+						<ns4:oppfolgingsplanSendesTilFastlege>true</ns4:oppfolgingsplanSendesTilFastlege>
+					</ns4:mottaksInformasjon>
+					<ns4:arbeidstakersDeltakelse>
+						<ns4:arbeidstakerIkkeMedvirketGjennomfoeringBegrunnelse>Vet ikke</ns4:arbeidstakerIkkeMedvirketGjennomfoeringBegrunnelse>
+						<ns4:arbeidstakerMedvirketGjennomfoering>false</ns4:arbeidstakerMedvirketGjennomfoering>
+					</ns4:arbeidstakersDeltakelse>
+					<ns4:utfyllendeOpplysninger />
+				</ns4:Skjemainnhold>
+			</ns4:melding>]]]]>>
+			     </FormData>
+				</Form>
+			</FormTask>
+		</DataUnit>
+    </DataUnits>
+</DataBatch>

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DataBatch schemaVersion="1.0" batchReference="85093" previousReference="85092" receiverReference="3e8bcaa1-f01e-4ad1-98a4-912cbd77e4fd" timeStamp="2017-03-14T13:18:37" formTasksInBatch="1"> 
+    <DataUnits>
+        <DataUnit reportee="987654321" archiveReference="AR186474165" archiveTimeStamp="2017-03-14T13:18:36.77">
+            <FormTask>
+                <ServiceCode>2913</ServiceCode>
+                <ServiceEditionCode>2</ServiceEditionCode>
+                <Form>
+                    <DataFormatId>3521</DataFormatId>
+                    <DataFormatVersion>32733</DataFormatVersion>
+                    <Reference>77426094</Reference>
+                    <ParentReference>0</ParentReference>
+                    <FormData><![CDATA[
+										<ns3:melding xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:kodebib="http://kodebibliotek.brreg.no/xsd/kodebibliotek" xmlns:seres="http://seres.no/xsd/forvaltningsdata" xmlns:ns1="http://seres.no/xsd/NAV/Oppfølgingsplan_M/2011" xmlns:ns2="http://seres.no/xsd/NAV/Oppfølgingsplan_M/2012" xmlns:ns3="http://seres.no/xsd/NAV/Oppfølgingsplan2_M/2012" xmlns:ns4="http://seres.no/xsd/NAV/Oppfølgingsplan2_M/2014" xmlns:my="http://schemas.microsoft.com/office/infopath/2003/myXSD/2011-11-08T11:06:24" xmlns:xd="http://schemas.microsoft.com/office/infopath/2003">
+											<ns3:Skjemainnhold>
+											<ns3:arbeidsgiver>
+												<ns3:annenKontaktpersonEtternavn>Navnesen</ns3:annenKontaktpersonEtternavn>
+												<ns3:telefonNaermesteLeder>90012345</ns3:telefonNaermesteLeder>
+												<ns3:naermesteLederFornavn>Forpleiningsleder</ns3:naermesteLederFornavn>
+												<ns3:orgnr>973123456</ns3:orgnr>
+												<ns3:orgnavn>Services AS</ns3:orgnavn>
+												<ns3:virksomhetErIABedrift>true</ns3:virksomhetErIABedrift>
+												<ns3:virksomhetHarBedriftshelsetjeneste>true</ns3:virksomhetHarBedriftshelsetjeneste>
+												<ns3:telefonKontaktperson>90012345</ns3:telefonKontaktperson>
+												<ns3:naermesteLederEtternavn>Navnesen</ns3:naermesteLederEtternavn>
+												<ns3:annenKontaktpersonFornavn>Navn </ns3:annenKontaktpersonFornavn>
+											</ns3:arbeidsgiver>
+											<ns3:sykmeldtArbeidstaker>
+												<ns3:fnr>01010112345</ns3:fnr>
+												<ns3:etternavn>Navnesen</ns3:etternavn>
+												<ns3:stillingAvdeling>Renholder</ns3:stillingAvdeling>
+												<ns3:tlf>12 34 56 78</ns3:tlf>
+												<ns3:ordinaereArbeidsoppgaver>Renholder på Nordsjøen(offshore). </ns3:ordinaereArbeidsoppgaver>
+												<ns3:fornavn>Navn</ns3:fornavn>
+											</ns3:sykmeldtArbeidstaker>
+											<ns3:sykefravaerForSykmeldtArbeidstaker>
+												<ns3:foersteFravaersdag>2016-09-29</ns3:foersteFravaersdag>
+												<ns3:sykmeldingsdato>2016-11-08</ns3:sykmeldingsdato>
+												<ns3:sykmeldingsprosentVedSykmeldingsDato>100%</ns3:sykmeldingsprosentVedSykmeldingsDato>
+											</ns3:sykefravaerForSykmeldtArbeidstaker>
+											<ns3:avsenderSystem>
+												<ns3:systemNavn>HRessurs</ns3:systemNavn>
+												<ns3:systemVersjon>2012.6</ns3:systemVersjon>
+											</ns3:avsenderSystem>
+											<ns3:tiltak>
+												<ns3:tiltaksinformasjon>
+													<ns3:bistandHjelpemidler>false</ns3:bistandHjelpemidler>
+													<ns3:tidsrom>
+														<ns3:periodeFra>2016-09-29</ns3:periodeFra>
+														<ns3:periodeTil>2016-11-30</ns3:periodeTil>
+													</ns3:tidsrom>
+													<ns3:maalMedTiltaket>Å få Navn tilbake til jobb.</ns3:maalMedTiltaket>
+													<ns3:beskrivelseAvTiltaket>Arbeidsgiver vil holde tett kontakt med Navn, i samarbeid med både HR og BHT. Vi ønsker å legge til rette for at Navn kan forsøke seg gradvis tilbake til arbeid når hun har stabilisert se. Da med 50% sykemelding til å begynne med.</ns3:beskrivelseAvTiltaket>
+													<ns3:bistandRaadOgVeiledning>false</ns3:bistandRaadOgVeiledning>
+													<ns3:bistandDialogMoeteMedNav>false</ns3:bistandDialogMoeteMedNav>
+													<ns3:bistandArbeidsrettedeTiltakOgVirkemidler>false</ns3:bistandArbeidsrettedeTiltakOgVirkemidler>
+													<ns3:bistandBedriftshelsetjenesten>false</ns3:bistandBedriftshelsetjenesten>
+													<ns3:ordinaereArbeidsoppgaverSomIkkeKanUtfoeres>Kan utføre alle arbeidsoppgaver, bortsett fra tunge løft.</ns3:ordinaereArbeidsoppgaverSomIkkeKanUtfoeres>
+													<ns3:sykmeldingsprosentIPerioden>100</ns3:sykmeldingsprosentIPerioden>
+													<ns3:signertPapirkopiForeligger>false</ns3:signertPapirkopiForeligger>
+													<ns3:underskriftsdato>2017-03-14</ns3:underskriftsdato>
+													<ns3:oppfoelgingssamtaler>08/11: Navn har hatt samtale med Navn i dag. Hun er informert over reglene rund tilrettelegging og at vi kun godtar dokumentert og legegodkjent tilrettelegging.
+		Arbeidsgiver opplyser at vi er bekymret for at permanent tilrettelegging skal gå utover andre ansatte.
+		Det er mulig vi må ta en ny vurdering av Navns helseattest. 
+
+		28/11: Navn snakket med Navn i dag, hun sliter fortsatt med høyt blodtrykk og legene har fortsatt ikke klart å finne ut av hva som er galt med Navn.. Hun skal til legen førstkommende Fredag 02/12, jeg ringer til henne på mandag for å høre status. Navn ønsker å forsøke seg med 50% sykemelding om det er forenlig med hennes helse. Jeg har videre gitt beskjed om at vi må ta en ny vurdering av helseattest, BHT må bli koblet på her. 
+		Navn skal inn til hjertespesialist den 18.januar. 
+
+		06/12: Arbeidsgiver (Navn) har i dag pratet med Navn. Grunnet hennes hjerteproblemer og utfordringer med høyt og ustabilt blodtrykk kan ikke Navn reise ut. Vi har gjort en avtale på at jeg kontakter Navn igjen etter at hun har vært hos hjertespesialist den 18.Januar. Vi vil da legge en plan for veien videre og koble på BHT for utredning av Navn.
+
+		10.03: Ingenting nytt, vi avventer til dialogmøte 2 med Nav for videre avklaring.
+													</ns3:oppfoelgingssamtaler>
+													<ns3:tilrettelagtArbeidIkkeMulig>- 50% sykmelding er mulig. Ikke mulighet med annet passende arbeid på land.
+		06/12: Grunnet Navn sine utfordringer er det pr. dags dato ingenting arbeidsgiver kan gjøre for å få Navn raskere tilbake til jobb.
+		25.1.17 kommer på jobb 5.2.17 en uke, 50 % sykemeldt
+													</ns3:tilrettelagtArbeidIkkeMulig>
+												</ns3:tiltaksinformasjon>
+											</ns3:tiltak>
+											<ns3:mottaksInformasjon>
+												<ns3:endringsDato>2017-03-14</ns3:endringsDato>
+												<ns3:oppfolgingsplanSendesTiNav>true</ns3:oppfolgingsplanSendesTiNav>
+												<ns3:oppfolgingsplanSendesTilFastlege>false</ns3:oppfolgingsplanSendesTilFastlege>
+											</ns3:mottaksInformasjon>
+											</ns3:Skjemainnhold>
+										</ns3:melding>]]]]>>
+									</FormData>
+								</Form>
+							</FormTask>
+						</DataUnit>
+					</DataUnits>
+				</DataBatch>

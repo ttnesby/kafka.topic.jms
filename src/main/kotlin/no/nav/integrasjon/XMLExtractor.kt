@@ -58,11 +58,11 @@ class XMLExtractor(xmlFile: String) {
                     "FormData",
                     XType.CDATA,
                     "",
-                    { xr ->
+                    { r ->
                         val str = StringBuilder()
-                        while (xr.hasNext() && xr.eventType != XMLEvent.END_ELEMENT) {
-                            str.append(xr.text)
-                            xr.next()
+                        while (r.hasNext() && r.eventType != XMLEvent.END_ELEMENT) {
+                            str.append(r.text)
+                            r.next()
                         }
                         str.toString().trim()
                     }
@@ -72,11 +72,11 @@ class XMLExtractor(xmlFile: String) {
                     "FormData",
                     XType.CDATA,
                     "",
-                    { xr ->
+                    { r ->
                         val str = StringBuilder()
-                        while (xr.hasNext() && xr.eventType != XMLEvent.END_ELEMENT) {
-                            str.append(xr.text)
-                            xr.next()
+                        while (r.hasNext() && r.eventType != XMLEvent.END_ELEMENT) {
+                            str.append(r.text)
+                            r.next()
                         }
                         str.toString().trim().dropLast(3)
                     }
@@ -95,12 +95,12 @@ class XMLExtractor(xmlFile: String) {
             "Attachment",
             XType.ATTACH,
             Attachment(),
-            { xr ->
+            { r ->
                 // read attributes before entering file content
-                val archRef = xr.getAttributeValue(0)
-                val fName = xr.getAttributeValue(1)
-                xr.next()
-                Attachment(archRef, fName, xr.text)
+                val archRef = r.getAttributeValue(0)
+                val fName = r.getAttributeValue(1)
+                r.next()
+                Attachment(archRef, fName, r.text)
             }
     )
 
@@ -122,12 +122,13 @@ class XMLExtractor(xmlFile: String) {
     }
 
     // Accepting unchecked type casting for INTERNAL function
+
     private fun <T>getElem(
             xr: XMLStreamReader,
             name: String,
             type: XType,
-            notFound: T = "" as T,
-            found: (xr: XMLStreamReader) -> T = { xr -> xr.text as T }
+            @Suppress("UNCHECKED_CAST") notFound: T = "" as T,
+            @Suppress("UNCHECKED_CAST") found: (r: XMLStreamReader) -> T = { r -> r.text as T }
     ): T =
         try {
             tailrec fun iterElem(): T =

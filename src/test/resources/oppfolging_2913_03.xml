@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DataBatch schemaVersion="1.0" batchReference="85085" previousReference="85084" receiverReference="eb871dd9-cb60-4fb5-9658-b9e3ffb5cae1" timeStamp="2017-03-14T12:52:40" formTasksInBatch="1"> 
+    <DataUnits>
+        <DataUnit reportee="983975240" archiveReference="AR186469746" archiveTimeStamp="2017-03-14T12:52:40.06">
+            <FormTask>
+                <ServiceCode>2913</ServiceCode>
+                <ServiceEditionCode>3</ServiceEditionCode>
+                <Form>
+                    <DataFormatId>3521</DataFormatId>
+                    <DataFormatVersion>37865</DataFormatVersion>
+                    <Reference>77423963</Reference>
+                    <ParentReference>0</ParentReference>
+                    <FormData>
+                        <![CDATA[
+											<ns4:melding xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:kodebib="http://kodebibliotek.brreg.no/xsd/kodebibliotek" xmlns:seres="http://seres.no/xsd/forvaltningsdata" xmlns:ns1="http://seres.no/xsd/NAV/Oppfølgingsplan_M/2011" xmlns:ns2="http://seres.no/xsd/NAV/Oppfølgingsplan_M/2012" xmlns:ns3="http://seres.no/xsd/NAV/Oppfølgingsplan2_M/2012" xmlns:ns4="http://seres.no/xsd/NAV/Oppfølgingsplan2_M/2014" xmlns:my="http://schemas.microsoft.com/office/infopath/2003/myXSD/2011-11-08T11:06:24" xmlns:xd="http://schemas.microsoft.com/office/infopath/2003">
+												<ns4:Skjemainnhold>
+													<ns4:arbeidsgiver>
+														<ns4:annenKontaktpersonEtternavn>Navnesen</ns4:annenKontaktpersonEtternavn>
+														<ns4:telefonNaermesteLeder>900112345</ns4:telefonNaermesteLeder>
+														<ns4:naermesteLederFornavn>Navn</ns4:naermesteLederFornavn>
+														<ns4:orgnr>987654321</ns4:orgnr>
+														<ns4:orgnavn>Sørlandet sykehus HF</ns4:orgnavn>
+														<ns4:virksomhetErIABedrift>true</ns4:virksomhetErIABedrift>
+														<ns4:virksomhetHarBedriftshelsetjeneste>true</ns4:virksomhetHarBedriftshelsetjeneste>
+														<ns4:telefonKontaktperson>90012345</ns4:telefonKontaktperson>
+														<ns4:naermesteLederEtternavn>Navnesen</ns4:naermesteLederEtternavn>
+														<ns4:annenKontaktpersonFornavn>Navn</ns4:annenKontaktpersonFornavn>
+													</ns4:arbeidsgiver>
+													<ns4:sykmeldtArbeidstaker>
+														<ns4:fnr>01010112345</ns4:fnr>
+														<ns4:etternavn>Navnesen</ns4:etternavn>
+														<ns4:stillingAvdeling>DPS Lister FACT-team</ns4:stillingAvdeling>
+														<ns4:tlf>90012345</ns4:tlf>
+														<ns4:ordinaereArbeidsoppgaver>100% Miljøterapaut i FACT Lister med pasientansvar</ns4:ordinaereArbeidsoppgaver>
+														<ns4:fornavn>Navn</ns4:fornavn>
+													</ns4:sykmeldtArbeidstaker>
+													<ns4:sykefravaerForSykmeldtArbeidstaker>
+														<ns4:foersteFravaersdag>2017-01-12</ns4:foersteFravaersdag>
+														<ns4:sykmeldingsdato>2017-01-12</ns4:sykmeldingsdato>
+														<ns4:sykmeldingsprosentVedSykmeldingsDato>100</ns4:sykmeldingsprosentVedSykmeldingsDato>
+													</ns4:sykefravaerForSykmeldtArbeidstaker>
+													<ns4:avsenderSystem>
+														<ns4:systemNavn>Bluegarden Personal Portal</ns4:systemNavn>
+														<ns4:systemVersjon>2013 R1</ns4:systemVersjon>
+													</ns4:avsenderSystem>
+													<ns4:tiltak>
+														<ns4:tiltaksinformasjon>
+															<ns4:bistandAndreBeskrivelse>Ingen Tiltak</ns4:bistandAndreBeskrivelse>
+															<ns4:bistandAndre>false</ns4:bistandAndre>
+															<ns4:tidsrom></ns4:tidsrom>
+															<ns4:ordinaereArbeidsoppgaverSomIkkeKanUtfoeres>Har gått fra 100% sykemelding til 20% fra 23.01.17. Vi har sammen lagt til rette for at han deler opp uken med en dag borte midt i uken. Dette har arbeidstaker kommet med som forslag kan medføre at han kan fortsatt stå i 80% aktiv jobb og at han utfører sine arbeidsoppgaver.</ns4:ordinaereArbeidsoppgaverSomIkkeKanUtfoeres>
+															<ns4:signertPapirkopiForeligger>true</ns4:signertPapirkopiForeligger>
+															<ns4:underskriftsdato>2017-03-14</ns4:underskriftsdato>
+															<ns4:oppfoelgingssamtaler>Inntil videre avklaring fortetter ordning med 20% sykemelding med tilrettelegging av en fridag midt i uken.</ns4:oppfoelgingssamtaler>
+															<ns4:tilrettelagtArbeidIkkeMulig>Har til nå fungert bra i 80% stilling og arbeidstaker utfører sine arbeidsoppgaver.</ns4:tilrettelagtArbeidIkkeMulig>
+														</ns4:tiltaksinformasjon>
+													</ns4:tiltak>
+													<ns4:mottaksInformasjon>
+														<ns4:endringsDato>2017-02-28</ns4:endringsDato>
+														<ns4:oppfolgingsplanSendesTiNav>true</ns4:oppfolgingsplanSendesTiNav>
+														<ns4:oppfolgingsplanSendesTilFastlege>false</ns4:oppfolgingsplanSendesTilFastlege>
+													</ns4:mottaksInformasjon>
+												</ns4:Skjemainnhold>
+											</ns4:melding>]]]]>>
+									</FormData>
+								</Form>
+							</FormTask>
+						</DataUnit>
+					</DataUnits>
+				</DataBatch>

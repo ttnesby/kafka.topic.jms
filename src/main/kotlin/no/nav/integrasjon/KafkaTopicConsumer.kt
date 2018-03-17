@@ -33,7 +33,6 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
                     .apply {
                         // be a loner - independent of group logic by reading from all partitions for topic
                         assign(partitionsFor(clientDetails.topic).map { TopicPartition(it.topic(),it.partition()) })
-                        //subscribe(kotlin.collections.listOf(clientDetails.topic))
                     }
                     .use { c ->
 

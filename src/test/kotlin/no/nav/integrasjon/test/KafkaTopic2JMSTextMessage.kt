@@ -120,7 +120,7 @@ object KafkaTopic2JMSTextMessage : Spek({
     fun getFileAsString(filePath: String) = Files.lines(File(filePath).toPath())
             .collect(Collectors.joining("\n"))
 
-    xdescribe("Kafka topic listener transforming events to jms backend tests") {
+    describe("Kafka topic listener transforming events to jms backend tests") {
 
         val data = (1..100).map {"data-$it"}
         val dataInt = (1..100).map { it }
