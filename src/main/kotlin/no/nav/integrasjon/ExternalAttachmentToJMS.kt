@@ -3,14 +3,13 @@ package no.nav.integrasjon
 import org.apache.avro.generic.GenericRecord
 import java.io.StringReader
 import java.io.StringWriter
-import javax.xml.transform.TransformerFactory
-
 
 class ExternalAttachmentToJMS(
         jmsDetails: JMSDetails,
         xsltFilePath: String) : JMSTextMessageWriter<GenericRecord>(jmsDetails) {
 
-    //Substituted TransformerFactory.newInstance() with saxon version 2 and 3 - support for current-dateTime...
+    //Substituted TransformerFactory.newInstance() with saxon,
+    // support for xsl version 2 and 3
     private val xFactory = net.sf.saxon.TransformerFactoryImpl()
     private val xslt = xFactory.newTransformer(
             javax.xml.transform.stream.StreamSource(xsltFilePath))

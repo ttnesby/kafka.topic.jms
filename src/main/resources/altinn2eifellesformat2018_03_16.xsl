@@ -1,7 +1,6 @@
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
 				xmlns:fn="http://www.w3.org/2005/xpath-functions"
-                xmlns:ns4="http://seres.no/xsd/NAV/Oppfoelgingsplan4_utfyllende_info_M/2016"
-				exclude-result-prefixes="fn ns4" version="1.1">
+                xmlns:ns4="http://seres.no/xsd/NAV/Oppfoelgingsplan4_utfyllende_info_M/2016" exclude-result-prefixes="fn ns4" version="1.1">
 
     <xsl:output
         method="xml"
@@ -16,11 +15,12 @@
         versus xsl. 
         Continueous delivery makes code changes a lot easier...
         
-        This xsl constitutes the following from 'old' Altinnkanal
+        This xsl replace the following set of XSL`s from 'old' Altinnkanal
         - oppfolgingsplan201607_2
         - oppfolgingsplan2_4M
         - oppfolgingsplan_Altinn
         - sbl_oppfolgingsplan_v4
+        - bankkontonummer_m
     -->
     
 	<xsl:param name="ServiceCode"/>

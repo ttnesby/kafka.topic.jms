@@ -120,78 +120,7 @@ object KafkaTopic2JMSTextMessage : Spek({
     fun getFileAsString(filePath: String) = Files.lines(File(filePath).toPath())
             .collect(Collectors.joining("\n"))
 
-    describe("XMLExtractor tests") {
-
-        context("oppfolging tests") {
-
-            it("2913_04 should contain non-empty ServiceCode, Reference, FormData and OrgNo") {
-
-                val xmlFile = String(
-                        Files.readAllBytes(Paths.get("src/test/resources/oppfolging_2913_04.xml")),
-                        StandardCharsets.UTF_8
-                )
-
-                val ex = XMLExtractor(xmlFile)
-
-                ex.serviceCode shouldBeEqualTo "2913"
-                ex.reference shouldBeEqualTo "77423963"
-                ex.formData.isNotEmpty() shouldEqualTo true
-                ex.orgNo shouldBeEqualTo "973094718"
-            }
-
-            it("2913_03 should contain non-empty ServiceCode, Reference, FormData and OrgNo") {
-
-                val xmlFile = String(
-                        Files.readAllBytes(Paths.get("src/test/resources/oppfolging_2913_03.xml")),
-                        StandardCharsets.UTF_8
-                )
-
-                val ex = XMLExtractor(xmlFile)
-
-                ex.serviceCode shouldBeEqualTo "2913"
-                ex.reference shouldBeEqualTo "77423963"
-                ex.formData.isNotEmpty() shouldEqualTo true
-                ex.orgNo shouldBeEqualTo "987654321"
-            }
-
-            it("2913_02 should contain non-empty ServiceCode, Reference, FormData and OrgNo") {
-
-                val xmlFile = String(
-                        Files.readAllBytes(Paths.get("src/test/resources/oppfolging_2913_02.xml")),
-                        StandardCharsets.UTF_8
-                )
-
-                val ex = XMLExtractor(xmlFile)
-
-                ex.serviceCode shouldBeEqualTo "2913"
-                ex.reference shouldBeEqualTo "77426094"
-                ex.formData.isNotEmpty() shouldEqualTo true
-                ex.orgNo shouldBeEqualTo "973123456"
-            }
-
-            it("navoppfplan_... should contain non-empty ServiceCode, Reference, FormData, OrgNo and attachment") {
-
-                val xmlFile = String(
-                        Files.readAllBytes(Paths.get("src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml")),
-                        StandardCharsets.UTF_8
-                )
-
-                val ex = XMLExtractor(xmlFile)
-
-                ex.serviceCode shouldBeEqualTo "NavOppfPlan"
-                ex.reference shouldBeEqualTo "rapportering-sykmeldte"
-                ex.formData.isNotEmpty() shouldEqualTo true
-                ex.attachment.archiveReference shouldBeEqualTo "170314125626-974114127"
-                ex.attachment.fileName shouldBeEqualTo "20170314114144191.pdf"
-                ex.attachment.fileContent.isNotEmpty() shouldEqualTo true
-                ex.orgNo shouldBeEqualTo "90012345"
-            }
-
-        }
-
-    }
-
-    describe("Kafka topic listener transforming events to jms backend tests") {
+    xdescribe("Kafka topic listener transforming events to jms backend tests") {
 
         val data = (1..100).map {"data-$it"}
         val dataInt = (1..100).map { it }
@@ -495,7 +424,7 @@ object KafkaTopic2JMSTextMessage : Spek({
                         kCDetailsAvro,
                         ExternalAttachmentToJMS(
                                 jmsDetails,
-                                "src/main/resources/oppfolgingsplan2018_03_16.xsl"))
+                                "src/main/resources/altinn2eifellesformat2018_03_16.xsl"))
                         .manageAsync()
 
                 val producer = KafkaTopicProducer.init<String,GenericRecord>(
