@@ -49,7 +49,7 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
                                 when (fromDownStream.receive()) {
                                     Ready -> try {
                                         c.commitSync()
-                                        log.debug { "Got DoCommit from pipeline - event committed" }
+                                        log.debug { "Got Ready from downstream - event committed" }
                                     }
                                     catch (e: CommitFailedException) {
                                         log.error("CommitFailedException", e)
@@ -58,7 +58,7 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
                                     Problem -> {
                                         // problems further down the pipeline
                                         allGood = false
-                                        log.debug { "Got NoCommit from pipeline - time to leave" }
+                                        log.debug { "Got Problem from downstream - time to leave" }
                                     }
                                 }
                             }
@@ -105,6 +105,7 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
             set(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
             // poll only one record of
             set(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
+            //TODO - must set max.bytes to at least 5 MB
         }
     }
 }

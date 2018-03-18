@@ -8,8 +8,8 @@ class ExternalAttachmentToJMS(
         jmsDetails: JMSDetails,
         xsltFilePath: String) : JMSTextMessageWriter<GenericRecord>(jmsDetails) {
 
-    //Substituted TransformerFactory.newInstance() with saxon,
-    // support for xsl version 2 and 3
+    // Substituted TransformerFactory.newInstance() with saxon,
+    // support for xsl version 2 and 3 with better support for diverse functions
     private val xFactory = net.sf.saxon.TransformerFactoryImpl()
     private val xslt = xFactory.newTransformer(
             javax.xml.transform.stream.StreamSource(xsltFilePath))
