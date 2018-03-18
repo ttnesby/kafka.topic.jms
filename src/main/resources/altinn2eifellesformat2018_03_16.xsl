@@ -1,6 +1,6 @@
 <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
-				xmlns:fn="http://www.w3.org/2005/xpath-functions"
-                xmlns:ns4="http://seres.no/xsd/NAV/Oppfoelgingsplan4_utfyllende_info_M/2016" exclude-result-prefixes="fn ns4" version="1.1">
+				xmlns:fn="http://www.w3.org/2005/xpath-functions" 
+                exclude-result-prefixes="fn" version="2.0">
 
     <xsl:output
         method="xml"

@@ -11,6 +11,7 @@ import io.ktor.server.netty.Netty
 import kotlinx.coroutines.experimental.cancelAndJoin
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
+import no.nav.integrasjon.jms.JMSDetails
 import org.apache.activemq.ActiveMQConnectionFactory
 import org.apache.avro.generic.GenericRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
@@ -42,7 +43,7 @@ fun bootstrap() {
 
     val jmsDetails = JMSDetails(
             ActiveMQConnectionFactory("vm://localhost?broker.persistent=false") as ConnectionFactory,
-            "kafkaEvents"
+            "toDownstream"
     )
 
 

@@ -1,7 +1,7 @@
 package no.nav.integrasjon.test
 
 import mu.KotlinLogging
-import no.nav.integrasjon.XMLExtractor
+import no.nav.integrasjon.jms.XMLExtractor
 import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldEqualTo
 import org.jetbrains.spek.api.Spek

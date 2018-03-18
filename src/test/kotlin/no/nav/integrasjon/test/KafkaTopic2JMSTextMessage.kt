@@ -2,10 +2,17 @@ package no.nav.integrasjon.test
 
 import kotlinx.coroutines.experimental.*
 import no.nav.common.KafkaEnvironment
-import no.nav.integrasjon.*
+import no.nav.integrasjon.jms.ExternalAttachmentToJMS
+import no.nav.integrasjon.jms.JMSDetails
+import no.nav.integrasjon.jms.JMSTextMessageWriter
+import no.nav.integrasjon.kafka.KafkaClientDetails
+import no.nav.integrasjon.kafka.KafkaTopicConsumer
+import no.nav.integrasjon.manager.Channels
+import no.nav.integrasjon.manager.ManagePipeline
+import no.nav.integrasjon.manager.Problem
+import no.nav.integrasjon.manager.Ready
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import no.nav.integrasjon.test.utils.KafkaTopicProducer
-import org.amshove.kluent.shouldBeEqualTo
 import org.amshove.kluent.shouldContainAll
 import org.amshove.kluent.shouldEqualTo
 import org.apache.activemq.ActiveMQConnectionFactory
@@ -17,9 +24,7 @@ import org.apache.kafka.clients.producer.ProducerConfig
 import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.*
 import java.io.File
-import java.nio.charset.StandardCharsets
 import java.nio.file.Files
-import java.nio.file.Paths
 import java.util.*
 import java.util.stream.Collectors
 import javax.jms.TextMessage
@@ -88,7 +93,7 @@ object KafkaTopic2JMSTextMessage : Spek({
 
     val jmsDetails = JMSDetails(
             ActiveMQConnectionFactory("vm://localhost?broker.persistent=false"),
-            "kafkaEvents"
+            "toDownstream"
     )
 
     class TrfString : JMSTextMessageWriter<String>(jmsDetails) {
@@ -187,18 +192,18 @@ object KafkaTopic2JMSTextMessage : Spek({
 
                         // kick of asynchronous task for receiving data from kafka
                         val consumer = KafkaTopicConsumer.init<String, String>(kCDetailsStr)
-                                .consumeAsync(c.kafkaEvents,c.commitAction,c.status)
+                                .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
 
-                        if (c.status.receive() == Problem) return@runBlocking
+                        if (c.toManager.receive() == Problem) return@runBlocking
 
                         //kick of asynchronous task for sending data to kafka
                         val producer = KafkaTopicProducer.init<String,String>(kPDetailsStr, "key").produceAsync(data)
 
                         withTimeoutOrNull(patienceLimit) {
-                            while (events.size < data.size && (c.status.poll()?.let { it } != Problem))
-                                c.kafkaEvents.receive().also {
+                            while (events.size < data.size && (c.toManager.poll()?.let { it } != Problem))
+                                c.toDownstream.receive().also {
                                     events.add(it)
-                                    c.commitAction.send(DoCommit)
+                                    c.fromDownstream.send(Ready)
                                 }
                         }
 
@@ -220,15 +225,15 @@ object KafkaTopic2JMSTextMessage : Spek({
 
                         // kick of asynchronous task for receiving data from kafka
                         val consumer = KafkaTopicConsumer.init<String, String>(kCDetailsStr)
-                                .consumeAsync(c.kafkaEvents,c.commitAction,c.status)
+                                .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
 
-                        if (c.status.receive() == Problem) return@runBlocking
+                        if (c.toManager.receive() == Problem) return@runBlocking
 
                         withTimeoutOrNull(2_000L) {
-                            while (events.isEmpty() && (c.status.poll()?.let { it } != Problem)) {
-                                c.kafkaEvents.poll()?.let {
+                            while (events.isEmpty() && (c.toManager.poll()?.let { it } != Problem)) {
+                                c.toDownstream.poll()?.let {
                                     events.add(it)
-                                    c.commitAction.send(DoCommit)
+                                    c.fromDownstream.send(Ready)
                                 }
                                 delay(waitPatience)
                             }
@@ -253,18 +258,18 @@ object KafkaTopic2JMSTextMessage : Spek({
 
                         // kick of asynchronous task for receiving data from kafka
                         val consumer = KafkaTopicConsumer.init<String, Int>(kCDetailsInt)
-                                .consumeAsync(c.kafkaEvents,c.commitAction,c.status)
+                                .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
 
-                        if (c.status.receive() == Problem) return@runBlocking
+                        if (c.toManager.receive() == Problem) return@runBlocking
 
                         //kick of asynchronous task for sending data to kafka
                         val producer = KafkaTopicProducer.init<String,Int>(kPDetailsInt, "key").produceAsync(dataInt)
 
                         withTimeoutOrNull(patienceLimit) {
-                            while (events.size < dataInt.size && (c.status.poll()?.let { it } != Problem))
-                                c.kafkaEvents.receive().also {
+                            while (events.size < dataInt.size && (c.toManager.poll()?.let { it } != Problem))
+                                c.toDownstream.receive().also {
                                     events.add(it)
-                                    c.commitAction.send(DoCommit)
+                                    c.fromDownstream.send(Ready)
                                 }
                         }
 
@@ -286,15 +291,15 @@ object KafkaTopic2JMSTextMessage : Spek({
 
                         // kick of asynchronous task for receiving data from kafka
                         val consumer = KafkaTopicConsumer.init<String, Int>(kCDetailsInt)
-                                .consumeAsync(c.kafkaEvents,c.commitAction,c.status)
+                                .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
 
-                        if (c.status.receive() == Problem) return@runBlocking
+                        if (c.toManager.receive() == Problem) return@runBlocking
 
                         withTimeoutOrNull(2_000L) {
                             while (events.isEmpty()) {
-                                c.kafkaEvents.poll()?.let {
+                                c.toDownstream.poll()?.let {
                                     events.add(it)
-                                    c.commitAction.send(DoCommit)
+                                    c.fromDownstream.send(Ready)
                                 }
                                 delay(waitPatience)
                             }

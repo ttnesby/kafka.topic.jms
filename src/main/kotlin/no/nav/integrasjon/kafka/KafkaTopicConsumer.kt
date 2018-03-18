@@ -1,10 +1,13 @@
-package no.nav.integrasjon
+package no.nav.integrasjon.kafka
 
 import kotlinx.coroutines.experimental.CancellationException
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.SendChannel
 import mu.KotlinLogging
+import no.nav.integrasjon.manager.Problem
+import no.nav.integrasjon.manager.Ready
+import no.nav.integrasjon.manager.Status
 import org.apache.kafka.clients.consumer.CommitFailedException
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -12,22 +15,12 @@ import org.apache.kafka.common.TopicPartition
 import java.util.*
 import kotlin.reflect.full.starProjectedType
 
-data class KafkaClientDetails(
-        val baseProps: Properties,
-        val topic: String,
-        val pollTimeout: Long = 10_000L //for consumer
-)
-
-sealed class CommitAction
-object DoCommit : CommitAction()
-object NoCommit : CommitAction()
-
 class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails) {
 
     fun consumeAsync(
-            kafkaEvents: SendChannel<V>,
-            commitAction: ReceiveChannel<CommitAction>,
-            status: SendChannel<Status>) = async {
+            toDownstream: SendChannel<V>,
+            fromDownStream: ReceiveChannel<Status>,
+            toManager: SendChannel<Status>) = async {
         try {
             KafkaConsumer<K, V>(clientDetails.baseProps)
                     .apply {
@@ -37,7 +30,7 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
                     .use { c ->
 
                         var allGood = true
-                        status.send(Ready)
+                        toManager.send(Ready)
 
                         log.info("@start of consumeAsync")
 
@@ -49,12 +42,12 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
 
                                 // send event further down the pipeline
 
-                                kafkaEvents.send(e.value())
+                                toDownstream.send(e.value())
                                 log.debug { "Sent event to pipeline - $e" }
 
                                 // wait for feedback from pipeline
-                                when (commitAction.receive()) {
-                                    DoCommit -> try {
+                                when (fromDownStream.receive()) {
+                                    Ready -> try {
                                         c.commitSync()
                                         log.debug { "Got DoCommit from pipeline - event committed" }
                                     }
@@ -62,7 +55,7 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
                                         log.error("CommitFailedException", e)
                                         allGood = false
                                     }
-                                    NoCommit -> {
+                                    Problem -> {
                                         // problems further down the pipeline
                                         allGood = false
                                         log.debug { "Got NoCommit from pipeline - time to leave" }
@@ -83,8 +76,8 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
         // IllegalArgumentException, IllegalStateException
 
         // notify manager if this job is still active
-        if (isActive && !status.isClosedForSend) {
-            status.send(Problem)
+        if (isActive && !toManager.isClosedForSend) {
+            toManager.send(Problem)
             log.error("Reported problem to manager")
         }
         log.info("@end of consumeAsync - goodbye!")
@@ -94,12 +87,12 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
 
         private val log = KotlinLogging.logger {  }
 
-        inline fun <reified K, reified V> init(clientDetails: KafkaClientDetails) = KafkaTopicConsumer<K,V>(
-                        KafkaClientDetails(
-                                consumerInjection<K,V>(clientDetails.baseProps),
-                                clientDetails.topic,
-                                clientDetails.pollTimeout
-                        ))
+        inline fun <reified K, reified V> init(clientDetails: KafkaClientDetails) = KafkaTopicConsumer<K, V>(
+                KafkaClientDetails(
+                        consumerInjection<K, V>(clientDetails.baseProps),
+                        clientDetails.topic,
+                        clientDetails.pollTimeout
+                ))
 
         inline fun <reified K, reified V> consumerInjection(baseProps: Properties) = baseProps.apply {
             set(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(K::class.starProjectedType))

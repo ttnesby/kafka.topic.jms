@@ -3,12 +3,11 @@ package no.nav.integrasjon.test.utils
 import kotlinx.coroutines.experimental.CancellationException
 import kotlinx.coroutines.experimental.async
 import mu.KotlinLogging
-import no.nav.integrasjon.KafkaClientDetails
-import no.nav.integrasjon.getKafkaSerializer
+import no.nav.integrasjon.kafka.KafkaClientDetails
+import no.nav.integrasjon.kafka.getKafkaSerializer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.header.Header
 import java.util.*
 import kotlin.reflect.full.starProjectedType
 

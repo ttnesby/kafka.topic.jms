@@ -1,4 +1,4 @@
-package no.nav.integrasjon
+package no.nav.integrasjon.jms
 
 import mu.KotlinLogging
 import java.io.StringReader

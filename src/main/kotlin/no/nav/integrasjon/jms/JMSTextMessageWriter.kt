@@ -1,17 +1,15 @@
-package no.nav.integrasjon
+package no.nav.integrasjon.jms
 
 import kotlinx.coroutines.experimental.CancellationException
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.SendChannel
 import mu.KotlinLogging
+import no.nav.integrasjon.manager.Problem
+import no.nav.integrasjon.manager.Ready
+import no.nav.integrasjon.manager.Status
 import javax.jms.*
 import kotlin.IllegalStateException
-
-data class JMSDetails(
-        val connFactory: ConnectionFactory,
-        val queueName: String
-)
 
 abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
 
@@ -23,22 +21,22 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
     data class Result(val status: Boolean = false, val txtMsg: TextMessage)
 
     fun writeAsync(
-            data: ReceiveChannel<V>,
-            commitAction: SendChannel<CommitAction>,
-            status: SendChannel<Status>) = async {
+            fromUpstream: ReceiveChannel<V>,
+            toUpstream: SendChannel<Status>,
+            toManager: SendChannel<Status>) = async {
 
         try {
             connection.use { _ ->
 
                 var allGood = true
-                status.send(Ready)
+                toManager.send(Ready)
 
                 log.info("@start of writeAsync")
 
-                // receive data, send to jms, and tell pipeline to commit
+                // receive fromUpstream, send to jms, and tell pipeline to commit
                 while (isActive && allGood) {
 
-                    data.receive().also { e ->
+                    fromUpstream.receive().also { e ->
                         try {
                             log.debug {"Received event: ${e.toString()}" }
 
@@ -49,13 +47,13 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
                                     log.debug {"Transformation ok: ${result.txtMsg}" }
                                     producer.send(result.txtMsg)
                                     log.debug {"Sent and received on JMS" }
-                                    commitAction.send(DoCommit)
+                                    toUpstream.send(Ready)
                                     log.debug {"Sent DoCommit to pipeline"}
                                 }
                                 else -> {
                                     log.debug {"Transformation failure!" }
                                     allGood = false
-                                    commitAction.send(NoCommit)
+                                    toUpstream.send(Problem)
                                     log.error("Sent NoCommit to pipeline")
                                 }
                             }
@@ -64,7 +62,7 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
                             // MessageFormatException, UnsupportedOperationException
                             // InvalidDestinationException, JMSException
                             allGood = false
-                            commitAction.send(NoCommit)
+                            toUpstream.send(Problem)
                             log.error("Exception", e)
                             log.error("Sent NoCommit to pipeline")
                         }
@@ -80,8 +78,8 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
         } // JMSSecurityException, JMSException, ClosedReceiveChannelException
 
         // notify manager if this job is still active
-        if (isActive && !status.isClosedForSend) {
-            status.send(Problem)
+        if (isActive && !toManager.isClosedForSend) {
+            toManager.send(Problem)
             log.error("Reported problem to manager")
         }
 
@@ -91,6 +89,7 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
     abstract fun transform(event: V): Result
 
     companion object {
+
         val log = KotlinLogging.logger {  }
     }
 }

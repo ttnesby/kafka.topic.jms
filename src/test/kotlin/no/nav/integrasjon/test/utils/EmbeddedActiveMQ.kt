@@ -1,7 +1,6 @@
 package no.nav.integrasjon.test.utils
 
-import no.nav.integrasjon.JMSDetails
-import javax.jms.ConnectionFactory
+import no.nav.integrasjon.jms.JMSDetails
 import javax.jms.Session
 
 /**

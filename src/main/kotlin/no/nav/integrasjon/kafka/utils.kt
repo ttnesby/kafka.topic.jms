@@ -1,4 +1,4 @@
-package no.nav.integrasjon
+package no.nav.integrasjon.kafka
 
 import org.apache.avro.generic.GenericRecord
 import kotlin.reflect.KType

@@ -1,28 +1,13 @@
-package no.nav.integrasjon
+package no.nav.integrasjon.manager
 
 import kotlinx.coroutines.experimental.*
-import kotlinx.coroutines.experimental.channels.Channel
 import mu.KotlinLogging
-
-sealed class Status
-object Problem: Status()
-object Ready: Status()
-
-class Channels<V>(noOfCoroutines: Int): AutoCloseable {
-
-    val commitAction = Channel<CommitAction>()
-    val status = Channel<Status>(noOfCoroutines)
-    val kafkaEvents = Channel<V>()
-
-    override fun close() {
-        commitAction.close()
-        status.close()
-        kafkaEvents.close()
-    }
-}
+import no.nav.integrasjon.jms.JMSTextMessageWriter
+import no.nav.integrasjon.kafka.KafkaClientDetails
+import no.nav.integrasjon.kafka.KafkaTopicConsumer
 
 class ManagePipeline<K,V>(
-        private val kafkaTopicConsumer: KafkaTopicConsumer<K,V>,
+        private val kafkaTopicConsumer: KafkaTopicConsumer<K, V>,
         private val jmsTextMessageWriter: JMSTextMessageWriter<V>) {
 
     private val c = Channels<V>(2)
@@ -34,23 +19,23 @@ class ManagePipeline<K,V>(
 
         // kick off coroutines starting with the end of pipeline
 
-        r.add(jmsTextMessageWriter.writeAsync(c.kafkaEvents, c.commitAction, c.status))
+        r.add(jmsTextMessageWriter.writeAsync(c.toDownstream, c.fromDownstream, c.toManager))
 
-        if (c.status.receive() == Problem) {
+        if (c.toManager.receive() == Problem) {
             c.close()
             return@async
         }
 
-        r.add(kafkaTopicConsumer.consumeAsync(c.kafkaEvents, c.commitAction,c.status))
+        r.add(kafkaTopicConsumer.consumeAsync(c.toDownstream, c.fromDownstream,c.toManager))
 
-        if (c.status.receive() == Problem) {
+        if (c.toManager.receive() == Problem) {
             r.filter { it.isActive }.forEach { it.cancelAndJoin() }
             c.close()
             return@async
         }
 
         try {
-            while (isActive && (c.status.receive().let {
+            while (isActive && (c.toManager.receive().let {
                         latestStatus = it
                     it} != Problem)) {}
         }
@@ -70,8 +55,8 @@ class ManagePipeline<K,V>(
 
         inline fun <reified K, reified V> init(
                 clientDetails: KafkaClientDetails,
-                jmsTextMessageWriter: JMSTextMessageWriter<V>): ManagePipeline<K,V> = ManagePipeline(
-                    KafkaTopicConsumer.init(clientDetails),
-                    jmsTextMessageWriter)
+                jmsTextMessageWriter: JMSTextMessageWriter<V>): ManagePipeline<K, V> = ManagePipeline(
+                KafkaTopicConsumer.init(clientDetails),
+                jmsTextMessageWriter)
     }
 }

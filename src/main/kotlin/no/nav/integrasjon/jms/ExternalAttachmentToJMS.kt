@@ -1,4 +1,4 @@
-package no.nav.integrasjon
+package no.nav.integrasjon.jms
 
 import org.apache.avro.generic.GenericRecord
 import java.io.StringReader
