@@ -44,17 +44,17 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
 
                             when(result.status) {
                                 true -> {
-                                    log.debug {"Transformation ok: ${result.txtMsg}" }
+                                    log.debug {"Transformation ok: ${result.txtMsg.text}" }
                                     producer.send(result.txtMsg)
                                     log.debug {"Sent and received on JMS" }
                                     toUpstream.send(Ready)
-                                    log.debug {"Sent DoCommit to pipeline"}
+                                    log.debug {"Sent Ready to upstream"}
                                 }
                                 else -> {
                                     log.debug {"Transformation failure!" }
                                     allGood = false
                                     toUpstream.send(Problem)
-                                    log.error("Sent NoCommit to pipeline")
+                                    log.error("Sent Problem to upstream")
                                 }
                             }
                         }
@@ -64,7 +64,7 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
                             allGood = false
                             toUpstream.send(Problem)
                             log.error("Exception", e)
-                            log.error("Sent NoCommit to pipeline")
+                            log.error("Sent Problem to upstream")
                         }
                     }
                 }

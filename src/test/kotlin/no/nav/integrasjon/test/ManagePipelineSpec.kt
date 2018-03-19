@@ -25,7 +25,7 @@ import java.util.*
 import javax.jms.TextMessage
 
 
-object KafkaTopic2JMSTextMessage : Spek({
+object ManagePipelineSpec : Spek({
 
     val topicStr = "testString"
     val topicInt = "testInt"
@@ -115,58 +115,81 @@ object KafkaTopic2JMSTextMessage : Spek({
                 )
     }
 
+    val dataStr = (1..100).map {"data-$it"}
+    val dataInt = (1..100).map { it }
+
     val schema = Schema.Parser().parse(File("src/main/resources/external_attachment.avsc"))
 
+    val dataAvro = (1..100).map {
+        GenericData.Record(schema).apply {
+            put("batch","batch-$it")
+            put("sc","sc-$it")
+            put("sec","sec-$it")
+            put("archRef","archRef-$it")
+        }
+    }
+    val dataMusic = (1..100).map {
+        GenericData.Record(schema).apply {
+            put("batch", getFileAsString("src/test/resources/musicCatalog.xml"))
+            put("sc","TESTONLY")
+            put("sec","sec-$it")
+            put("archRef","archRef-$it")
+        }
+    }
+
+    val dataEia = mutableListOf<GenericRecord>(
+            GenericData.Record(schema).apply {
+                put("batch", getFileAsString("src/test/resources/oppfolging_2913_02.xml"))
+                put("sc","2913")
+                put("sec","2")
+                put("archRef","test")
+            },
+            GenericData.Record(schema).apply {
+                put("batch", getFileAsString("src/test/resources/oppfolging_2913_03.xml"))
+                put("sc","2913")
+                put("sec","3")
+                put("archRef","test")
+            },
+            GenericData.Record(schema).apply {
+                put("batch", getFileAsString("src/test/resources/oppfolging_2913_04.xml"))
+                put("sc","2913")
+                put("sec","4")
+                put("archRef","test")
+            },
+            GenericData.Record(schema).apply {
+                put("batch", getFileAsString("src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml"))
+                put("sc","NavOppfPlan")
+                put("sec","rapportering_sykemeldte")
+                put("archRef","test")
+            },
+            GenericData.Record(schema).apply {
+                put("batch", getFileAsString("src/test/resources/bankkontonummer_2896_87.xml"))
+                put("sc","2896")
+                put("sec","87")
+                put("archRef","test")
+            }
+    )
+
+    val dataOther = mutableListOf<GenericRecord>(
+            GenericData.Record(schema).apply {
+                put("batch", getFileAsString("src/test/resources/maalekort_4711_01.xml"))
+                put("sc","4711")
+                put("sec","1")
+                put("archRef","test")
+            },
+            GenericData.Record(schema).apply {
+                put("batch", getFileAsString("src/test/resources/barnehageliste_4795_01.xml"))
+                put("sc","4795")
+                put("sec","1")
+                put("archRef","test")
+            }
+    )
+
+    val waitPatience = 100L
+    val patienceLimit = 7_000L
+
+
     describe("Kafka topic listener transforming events to jms backend tests") {
-
-        val dataStr = (1..100).map {"data-$it"}
-        val dataInt = (1..100).map { it }
-        val dataAvro = (1..100).map {
-            GenericData.Record(schema).apply {
-                put("batch","batch-$it")
-                put("sc","sc-$it")
-                put("sec","sec-$it")
-                put("archRef","archRef-$it")
-            }
-        }
-        val dataMusic = (1..100).map {
-            GenericData.Record(schema).apply {
-                put("batch", getFileAsString("src/test/resources/musicCatalog.xml"))
-                put("sc","sc-$it")
-                put("sec","sec-$it")
-                put("archRef","archRef-$it")
-            }
-        }
-
-        val dataEia = mutableListOf<GenericRecord>(
-                GenericData.Record(schema).apply {
-                    put("batch", getFileAsString("src/test/resources/oppfolging_2913_02.xml"))
-                    put("sc","2913")
-                    put("sec","2")
-                    put("archRef","test")
-                },
-                GenericData.Record(schema).apply {
-                    put("batch", getFileAsString("src/test/resources/oppfolging_2913_03.xml"))
-                    put("sc","2913")
-                    put("sec","3")
-                    put("archRef","test")
-                },
-                GenericData.Record(schema).apply {
-                    put("batch", getFileAsString("src/test/resources/oppfolging_2913_04.xml"))
-                    put("sc","2913")
-                    put("sec","4")
-                    put("archRef","test")
-                },
-                GenericData.Record(schema).apply {
-                    put("batch", getFileAsString("src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml"))
-                    put("sc","NavOppfPlan")
-                    put("sec","rapportering_sykemeldte")
-                    put("archRef","test")
-                }
-        )
-
-        val waitPatience = 100L
-        val patienceLimit = 7_000L
 
         beforeGroup {
             kEnv.start()
@@ -281,10 +304,10 @@ object KafkaTopic2JMSTextMessage : Spek({
             }
         }
 
-        context("send 2913-2,3,4 + navoppfplan avro ext. attachment elements, receive, transform " +
+        context("send altinn avro ext. attachment elements, receive, transform " +
                 "and send to jms") {
 
-            it("should receive ${dataEia.size} elements, transformed to xml") {
+            it("should receive ${dataEia.size} EIA elements, transformed to xml") {
 
                 val manager = ManagePipeline.init<String,GenericRecord>(
                         kCDetailsAvro,
@@ -302,7 +325,7 @@ object KafkaTopic2JMSTextMessage : Spek({
                     EmbeddedActiveMQ(jmsDetails).use { eMQ ->
 
                         withTimeoutOrNull(patienceLimit) {
-                            while (eMQ.queue.size < dataMusic.size && manager.isActive) delay(waitPatience)
+                            while (eMQ.queue.size < dataEia.size && manager.isActive) delay(waitPatience)
                         }
 
                         producer.cancelAndJoin()
@@ -311,6 +334,35 @@ object KafkaTopic2JMSTextMessage : Spek({
                         eMQ.queue.size
                     }
                 } shouldEqualTo  dataEia.size
+            }
+
+            it("should receive ${dataOther.size} other elements, transformed to xml") {
+
+                val manager = ManagePipeline.init<String,GenericRecord>(
+                        kCDetailsAvro,
+                        ExternalAttachmentToJMS(
+                                jmsDetails,
+                                "src/main/resources/altinn2eifellesformat2018_03_16.xsl"))
+                        .manageAsync()
+
+                val producer = KafkaTopicProducer.init<String,GenericRecord>(
+                        kPDetailsAvro,
+                        "key").produceAsync(dataOther)
+
+                runBlocking {
+
+                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+
+                        withTimeoutOrNull(patienceLimit) {
+                            while (eMQ.queue.size < dataOther.size && manager.isActive) delay(waitPatience)
+                        }
+
+                        producer.cancelAndJoin()
+                        manager.cancelAndJoin()
+
+                        eMQ.queue.size
+                    }
+                } shouldEqualTo  dataOther.size
             }
         }
 

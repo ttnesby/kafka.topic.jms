@@ -12,6 +12,7 @@ import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import no.nav.integrasjon.test.utils.getFileAsString
 import no.nav.integrasjon.test.utils.xmlOneliner
 import org.amshove.kluent.shouldContainAll
+import org.amshove.kluent.shouldEqualTo
 import org.apache.activemq.ActiveMQConnectionFactory
 import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
@@ -72,7 +73,7 @@ object JMSTextMessageWriterSpec : Spek({
     val dataMusic = (1..100).map {
         GenericData.Record(schema).apply {
             put("batch", getFileAsString("src/test/resources/musicCatalog.xml"))
-            put("sc","sc-$it")
+            put("sc","TESTONLY") // must be hard coded in order to be accepted by ExternalattachmentToJMS::transform
             put("sec","sec-$it")
             put("archRef","archRef-$it")
         }
@@ -101,6 +102,27 @@ object JMSTextMessageWriterSpec : Spek({
                 put("batch", getFileAsString("src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml"))
                 put("sc","NavOppfPlan")
                 put("sec","rapportering_sykemeldte")
+                put("archRef","test")
+            },
+            GenericData.Record(schema).apply {
+                put("batch", getFileAsString("src/test/resources/bankkontonummer_2896_87.xml"))
+                put("sc","2896")
+                put("sec","87")
+                put("archRef","test")
+            }
+    )
+
+    val dataOther = mutableListOf<GenericRecord>(
+            GenericData.Record(schema).apply {
+                put("batch", getFileAsString("src/test/resources/maalekort_4711_01.xml"))
+                put("sc","4711")
+                put("sec","1")
+                put("archRef","test")
+            },
+            GenericData.Record(schema).apply {
+                put("batch", getFileAsString("src/test/resources/barnehageliste_4795_01.xml"))
+                put("sc","4795")
+                put("sec","1")
                 put("archRef","test")
             }
     )
@@ -213,6 +235,60 @@ object JMSTextMessageWriterSpec : Spek({
                 } shouldContainAll dataMusic.map {
                     xmlOneliner(getFileAsString("src/test/resources/musicCatalog.html")).hashCode()
                 }
+            }
+
+            it("should receive ${dataEia.size} avro elements, transformed to xml") {
+
+                val channels = Channels<GenericRecord>(1)
+                val jms = ExternalAttachmentToJMS(
+                        jmsDetails,
+                        "src/main/resources/altinn2eifellesformat2018_03_16.xsl" )
+                        .writeAsync(channels.toDownstream,channels.fromDownstream,channels.toManager)
+
+                runBlocking {
+
+                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+
+                        withTimeoutOrNull(patienceLimit) {
+                            dataEia.forEach {
+                                channels.toDownstream.send(it)
+                                channels.fromDownstream.receive() //receive ack so the jms will continue to receive
+                            }
+                        }
+
+                        jms.cancelAndJoin()
+                        channels.close()
+
+                        eMQ.queue.size
+                    }
+                } shouldEqualTo dataEia.size
+            }
+
+            it("should receive ${dataOther.size} avro elements, transformed to xml") {
+
+                val channels = Channels<GenericRecord>(1)
+                val jms = ExternalAttachmentToJMS(
+                        jmsDetails,
+                        "src/main/resources/altinn2eifellesformat2018_03_16.xsl" )
+                        .writeAsync(channels.toDownstream,channels.fromDownstream,channels.toManager)
+
+                runBlocking {
+
+                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+
+                        withTimeoutOrNull(patienceLimit) {
+                            dataOther.forEach {
+                                channels.toDownstream.send(it)
+                                channels.fromDownstream.receive() //receive ack so the jms will continue to receive
+                            }
+                        }
+
+                        jms.cancelAndJoin()
+                        channels.close()
+
+                        eMQ.queue.size
+                    }
+                } shouldEqualTo dataOther.size
             }
         }
     }

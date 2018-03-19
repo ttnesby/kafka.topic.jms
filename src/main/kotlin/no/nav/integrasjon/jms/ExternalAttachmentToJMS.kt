@@ -16,29 +16,89 @@ class ExternalAttachmentToJMS(
 
     override fun transform(event: GenericRecord): Result {
 
-        if (event["sc"].toString() in listOf("2913","2896","NavOppfPlan")) {
+        val xml = event["batch"].toString()
+        val xe = XMLExtractor(xml)
 
-            val xe = XMLExtractor(event["batch"].toString())
+        return when(event["sc"].toString()) {
 
-            // prepare for parameters to the xsl document, programmatic is easier than xls...
-            xslt.apply {
-                setParameter("ServiceCode", xe.serviceCode)
-                setParameter("Reference", xe.reference)
-                setParameter("FormData", xe.formData)
-                setParameter("ArchiveReference", xe.attachment.archiveReference)
-                setParameter("FileName", xe.attachment.fileName)
-                setParameter("FileContent", xe.attachment.fileContent)
-                setParameter("OrgNo", xe.orgNo)
-                setParameter("Guuid", java.util.UUID.randomUUID().toString())
+            // TESTONLY
+            "TESTONLY" -> xslTransform(xml, xe)
+
+            // bankkontonummer - no file attachment even though it's available...
+            "2896" -> {
+                xslt.apply {
+                    setParameter("ServiceCode", xe.serviceCode)
+                    setParameter("Reference", xe.reference)
+                    setParameter("FormData", xe.formData)
+                    setParameter("ArchiveReference", "")
+                    setParameter("FileName", "")
+                    setParameter("FileContent", "")
+                    setParameter("OrgNo", xe.orgNo)
+                    setParameter("Guuid", java.util.UUID.randomUUID().toString())
+                }
+                xslTransform(xml, xe)
             }
+
+            // Oppfolgingsplan service edition code 2,3,4 - no attachment available
+            "2913" -> {
+                xslt.apply {
+                    setParameter("ServiceCode", xe.serviceCode)
+                    setParameter("Reference", xe.reference)
+                    setParameter("FormData", xe.formData)
+                    setParameter("ArchiveReference", "")
+                    setParameter("FileName", "")
+                    setParameter("FileContent", "")
+                    setParameter("OrgNo", xe.orgNo)
+                    setParameter("Guuid", java.util.UUID.randomUUID().toString())
+                }
+                xslTransform(xml, xe)
+            }
+
+            // Oppfolgingsplan service edition code rapportering-sykmeldte - with attachment
+            "NavOppfPlan" -> {
+                xslt.apply {
+                    setParameter("ServiceCode", xe.serviceCode)
+                    setParameter("Reference", xe.reference)
+                    setParameter("FormData", xe.formData)
+                    setParameter("ArchiveReference", xe.attachment.archiveReference)
+                    setParameter("FileName", xe.attachment.fileName)
+                    setParameter("FileContent", xe.attachment.fileContent)
+                    setParameter("OrgNo", xe.orgNo)
+                    setParameter("Guuid", java.util.UUID.randomUUID().toString())
+                }
+                xslTransform(xml, xe)
+            }
+
+            // Maalekort
+            "4711" -> Result(
+                    status = true,
+                    txtMsg = session.createTextMessage().apply { this.text = xe.formData })
+
+            // Barnehageliste
+            "4795" -> Result(
+                    status = true,
+                    txtMsg = session.createTextMessage().apply { this.text = xe.formData })
+
+            else -> {
+                log.error("Unknown service code in transform")
+                Result(
+                        status = false,
+                        txtMsg = session.createTextMessage().apply { this.text = "Unknown service code!" }
+                )
+            }
+
+
         }
+    }
+
+    private fun xslTransform(xml: String, xe: XMLExtractor): Result {
 
         val resultWriter = StringWriter()
 
         return try {
             xslt.transform(
-                javax.xml.transform.stream.StreamSource(StringReader(event["batch"].toString())),
-                javax.xml.transform.stream.StreamResult(resultWriter))
+                    javax.xml.transform.stream.StreamSource(StringReader(xml)),
+                    javax.xml.transform.stream.StreamResult(resultWriter))
             Result(
                     status = true,
                     txtMsg = session.createTextMessage().apply {

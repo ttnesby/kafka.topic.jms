@@ -113,12 +113,16 @@ class XMLExtractor(xmlFile: String) {
     val orgNo: String
 
     init {
-
-        orgNo = when(serviceCode) {
+        // avoid premature end of file message from stream reader if FormData is empty
+        orgNo = if (formData.isNotEmpty()) when(serviceCode) {
             "NavOppfPlan" -> getElem(xRFData,"bedriftsNr", XType.ELEM)
             "2896" -> getElem(xRFData,"organisasjonsnummer", XType.ELEM)
             else -> getElem(xRFData,"orgnr", XType.ELEM)
         }
+        else ""
+
+        xRDBatch.close()
+        xRFData.close()
     }
 
     // Accepting unchecked type casting for INTERNAL function
