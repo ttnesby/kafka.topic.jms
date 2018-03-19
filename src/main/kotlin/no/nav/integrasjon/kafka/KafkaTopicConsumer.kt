@@ -58,7 +58,7 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
                                     Problem -> {
                                         // problems further down the pipeline
                                         allGood = false
-                                        log.debug { "Got Problem from downstream - time to leave" }
+                                        log.error { "Got Problem from downstream - time to leave" }
                                     }
                                 }
                             }

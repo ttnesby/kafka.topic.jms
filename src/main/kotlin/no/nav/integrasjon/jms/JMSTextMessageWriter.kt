@@ -13,7 +13,7 @@ import kotlin.IllegalStateException
 
 abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
 
-    private val connection = jmsDetails.connFactory.createConnection().apply { this.start() }
+    private val connection = jmsDetails.connFactory.createConnection("app","").apply { this.start() }
     protected val session = connection?.createSession(false, Session.AUTO_ACKNOWLEDGE) ?:
             throw IllegalStateException("Cannot create session in JMSTextMessageWriter!")
     private val producer = session.createProducer(session.createQueue(jmsDetails.queueName))
