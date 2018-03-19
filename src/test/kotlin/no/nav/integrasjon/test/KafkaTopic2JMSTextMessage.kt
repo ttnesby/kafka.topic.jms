@@ -9,6 +9,7 @@ import no.nav.integrasjon.kafka.KafkaClientDetails
 import no.nav.integrasjon.manager.ManagePipeline
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import no.nav.integrasjon.test.utils.KafkaTopicProducer
+import no.nav.integrasjon.test.utils.getFileAsString
 import org.amshove.kluent.shouldContainAll
 import org.amshove.kluent.shouldEqualTo
 import org.apache.activemq.ActiveMQConnectionFactory
@@ -20,9 +21,7 @@ import org.apache.kafka.clients.producer.ProducerConfig
 import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.*
 import java.io.File
-import java.nio.file.Files
 import java.util.*
-import java.util.stream.Collectors
 import javax.jms.TextMessage
 
 
@@ -117,9 +116,6 @@ object KafkaTopic2JMSTextMessage : Spek({
     }
 
     val schema = Schema.Parser().parse(File("src/main/resources/external_attachment.avsc"))
-
-    fun getFileAsString(filePath: String) = Files.lines(File(filePath).toPath())
-            .collect(Collectors.joining("\n"))
 
     describe("Kafka topic listener transforming events to jms backend tests") {
 
