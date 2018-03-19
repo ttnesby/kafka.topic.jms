@@ -22,7 +22,7 @@ class KafkaTopicProducer<K, in V>(private val clientDetails: KafkaClientDetails,
 
             KafkaProducer<K, V>(clientDetails.baseProps).use { p ->
                 data.forEach { d ->
-                    p.send(ProducerRecord<K, V>(clientDetails.topic, key, d)).get()
+                    p.send(ProducerRecord<K, V>(clientDetails.topic, null, d)).get()
                     log.debug { "Sent record to kafka topic ${clientDetails.topic}" }
                 }
             }

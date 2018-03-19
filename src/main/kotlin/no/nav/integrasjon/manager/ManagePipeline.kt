@@ -19,6 +19,7 @@ class ManagePipeline<K,V>(
 
         // kick off coroutines starting with the end of pipeline
 
+        log.info("starting JMS writeAsync")
         r.add(jmsTextMessageWriter.writeAsync(c.toDownstream, c.fromDownstream, c.toManager))
 
         if (c.toManager.receive() == Problem) {
@@ -26,6 +27,7 @@ class ManagePipeline<K,V>(
             return@async
         }
 
+        log.info("starting Kafka consumeAsync")
         r.add(kafkaTopicConsumer.consumeAsync(c.toDownstream, c.fromDownstream,c.toManager))
 
         if (c.toManager.receive() == Problem) {
@@ -33,6 +35,8 @@ class ManagePipeline<K,V>(
             c.close()
             return@async
         }
+
+        log.info("@start of manageAsync passive waiting")
 
         try {
             while (isActive && (c.toManager.receive().let {

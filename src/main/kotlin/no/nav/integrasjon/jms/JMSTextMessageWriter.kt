@@ -11,11 +11,14 @@ import no.nav.integrasjon.manager.Status
 import javax.jms.*
 import kotlin.IllegalStateException
 
-abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
+abstract class JMSTextMessageWriter<in V>(private val jmsDetails: JMSDetails) {
 
-    private val connection = jmsDetails.connFactory.createConnection("app","").apply { this.start() }
+    private val connection = jmsDetails.connFactory.createConnection(jmsDetails.username,jmsDetails.password)
+            .apply { this.start() }
+
     protected val session = connection?.createSession(false, Session.AUTO_ACKNOWLEDGE) ?:
             throw IllegalStateException("Cannot create session in JMSTextMessageWriter!")
+
     private val producer = session.createProducer(session.createQueue(jmsDetails.queueName))
 
     data class Result(val status: Boolean = false, val txtMsg: TextMessage)
@@ -26,7 +29,7 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
             toManager: SendChannel<Status>) = async {
 
         try {
-            connection.use { _ ->
+            connection.use { c ->
 
                 var allGood = true
                 toManager.send(Ready)
@@ -38,33 +41,41 @@ abstract class JMSTextMessageWriter<in V>(jmsDetails: JMSDetails) {
 
                     fromUpstream.receive().also { e ->
                         try {
+                            log.info { "Received event from upstream" }
                             log.debug {"Received event: ${e.toString()}" }
 
+                            log.info { "Invoke transformation" }
                             val result = transform(e)
 
                             when(result.status) {
                                 true -> {
+                                    log.info { "Transformation to JMS TextMessage ok" }
                                     log.debug {"Transformation ok: ${result.txtMsg.text}" }
+
+                                    log.info { "Send TextMessage to JMS backend ${jmsDetails.queueName}" }
                                     producer.send(result.txtMsg)
-                                    log.debug {"Sent and received on JMS" }
+
+                                    log.info { "Send to JMS completed" }
+
+                                    log.info {"Send Ready to upstream"}
                                     toUpstream.send(Ready)
-                                    log.debug {"Sent Ready to upstream"}
+
                                 }
                                 else -> {
-                                    log.debug {"Transformation failure!" }
+                                    log.error {"Transformation failure, indicate problem to upstream and " +
+                                            "prepare for shutdown" }
                                     allGood = false
                                     toUpstream.send(Problem)
-                                    log.error("Sent Problem to upstream")
                                 }
                             }
                         }
                         catch (e: Exception) {
                             // MessageFormatException, UnsupportedOperationException
                             // InvalidDestinationException, JMSException
+                            log.error("Exception", e)
+                            log.error("Send Problem to upstream and prepare for shutdown")
                             allGood = false
                             toUpstream.send(Problem)
-                            log.error("Exception", e)
-                            log.error("Sent Problem to upstream")
                         }
                     }
                 }

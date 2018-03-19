@@ -25,53 +25,11 @@ import javax.jms.ConnectionFactory
 fun main(args: Array<String>) {
 
 
-    val xmlFile = String(
-            Files.readAllBytes(Paths.get("src/test/resources/musicCatalog.html")),
-            StandardCharsets.UTF_8
-    )
-
-    fun xmlOneliner(xml: String): String {
-
-        var betweeTags = false
-        val str = StringBuilder()
-
-
-        tailrec fun iter(i: CharIterator): String = if (!i.hasNext()) str.toString() else {
-            val c = i.nextChar()
-
-            when(c) {
-                '<' -> {
-                    betweeTags = false
-                    str.append(c)
-                }
-                '>' -> {
-                    betweeTags = true
-                    str.append(c)
-                }
-                ' ' -> if (!betweeTags) str.append(c)
-                '\n' -> if (!betweeTags) str.append(c)
-                else -> str.append(c)
-            }
-            iter(i)
-        }
-
-        return iter(xml.iterator())
-    }
-
-    println(xmlOneliner(xmlFile))
-
-    val xmlFile2 = String(
-            Files.readAllBytes(Paths.get("src/test/resources/oppfolging_2913_04.xml")),
-            StandardCharsets.UTF_8
-    )
-
-    println(xmlOneliner(xmlFile2))
-
-
 }
 
 fun bootstrap() {
 
+    // get kafka properties and set kafka client details
 /*
     val kEnv = KafkaEnvironment(topics = listOf("aTopic"), withSchemaRegistry = true).apply {
         start()
@@ -87,11 +45,14 @@ fun bootstrap() {
             "aTopic"
     )*/
 
+    // get fasit properties and make JMS connection factory with settings
+
     val jmsDetails = JMSDetails(
             ActiveMQConnectionFactory("vm://localhost?broker.persistent=false") as ConnectionFactory,
             "toDownstream"
     )
 
+    // establish pipeline
 
 /*
     val manager = ManagePipeline.init<String, GenericRecord>(
@@ -101,19 +62,19 @@ fun bootstrap() {
                     "src/test/resources/musicCatalog.xsl"))
             .manageAsync()
 */
-
+    // iff pipeline is up and running, establish REST server
 
     val eREST = embeddedServer(Netty, 8080) {
         install(ShutDownUrl.ApplicationCallFeature) {
-            shutDownUrl = "/shutdown"
+            shutDownUrl = "/redbutton/press"
             exitCodeSupplier = { 0 }
         }
         routing {
             get("/isAlive") {
-                call.respondText("Application is alive", ContentType.Text.Plain)
+                call.respondText("kafkatopic2jms is alive", ContentType.Text.Plain)
             }
             get("/isReady") {
-                call.respondText("Application is ready", ContentType.Text.Plain)
+                call.respondText("kafkatopic2jms is ready", ContentType.Text.Plain)
             }
         }
     }.start(wait = false)
@@ -129,5 +90,6 @@ fun bootstrap() {
 
         manager.cancelAndJoin()
         kEnv.tearDown()*/
+        eREST.application.dispose()
     }
 }

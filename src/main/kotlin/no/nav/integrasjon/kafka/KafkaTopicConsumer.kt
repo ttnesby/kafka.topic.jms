@@ -38,27 +38,33 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
 
                             c.poll(clientDetails.pollTimeout).forEach { e ->
 
-                                log.debug {"Polled event from kafka topic ${clientDetails.topic}" }
+                                log.info {"Polled event from kafka topic ${e.topic()}, " +
+                                        "partition ${e.partition()} and offset ${e.offset()}" }
 
-                                // send event further down the pipeline
-
+                                log.info { "Send event downstream and wait for response" }
                                 toDownstream.send(e.value())
-                                log.debug { "Sent event to pipeline - $e" }
+
 
                                 // wait for feedback from pipeline
                                 when (fromDownStream.receive()) {
                                     Ready -> try {
+                                        log.info { "Got Ready from downstream, will commit" }
                                         c.commitSync()
-                                        log.debug { "Got Ready from downstream - event committed" }
+                                        log.info { "Event topic ${e.topic()}, partition ${e.partition()} and " +
+                                                "offset ${e.offset()} is committed" }
                                     }
-                                    catch (e: CommitFailedException) {
-                                        log.error("CommitFailedException", e)
+                                    catch (ex: CommitFailedException) {
+                                        log.error("CommitFailedException", ex)
+                                        log.info { "Event topic ${e.topic()}, partition ${e.partition()} and " +
+                                                "offset ${e.offset()} NOT COMMITTED!" }
+                                        log.error("Prepare for shutdown")
                                         allGood = false
                                     }
                                     Problem -> {
-                                        // problems further down the pipeline
+                                        // problems downstream
+                                        log.error { "Got Problem from downstream, prepare for shutdown" }
                                         allGood = false
-                                        log.error { "Got Problem from downstream - time to leave" }
+
                                     }
                                 }
                             }

@@ -102,6 +102,8 @@ object ManagePipelineSpec : Spek({
                 queueManager = "QM1"
                 channel = "DEV.APP.SVRCONN"
                 transportType = WMQConstants.WMQ_CM_CLIENT
+                clientReconnectOptions = WMQConstants.WMQ_CLIENT_RECONNECT // will try to reconnect
+                clientReconnectTimeout = 45 // reconnection attempts for 45 seconds
                 ccsid = 1208
                 setIntProperty(WMQConstants.JMS_IBM_ENCODING, MQC.MQENC_NATIVE)
                 setIntProperty(WMQConstants.JMS_IBM_CHARACTER_SET, 1208)
@@ -189,20 +191,23 @@ object ManagePipelineSpec : Spek({
             }
     )
 
-    val dataOther = mutableListOf<GenericRecord>(
-            GenericData.Record(schema).apply {
-                put("batch", getFileAsString("src/test/resources/maalekort_4711_01.xml"))
-                put("sc","4711")
-                put("sec","1")
-                put("archRef","test")
-            },
-            GenericData.Record(schema).apply {
-                put("batch", getFileAsString("src/test/resources/barnehageliste_4795_01.xml"))
-                put("sc","4795")
-                put("sec","1")
-                put("archRef","test")
-            }
-    )
+    val dataOther = mutableListOf<GenericRecord>()
+
+    (1..50).forEach {
+        dataOther.add(GenericData.Record(schema).apply {
+            put("batch", getFileAsString("src/test/resources/maalekort_4711_01.xml"))
+            put("sc", "4711")
+            put("sec", "1")
+            put("archRef", "test")
+        })
+        dataOther.add(GenericData.Record(schema).apply {
+            put("batch", getFileAsString("src/test/resources/barnehageliste_4795_01.xml"))
+            put("sc", "4795")
+            put("sec", "1")
+            put("archRef", "test")
+        })
+    }
+
 
     val waitPatience = 100L
     val patienceLimit = 7_000L
@@ -214,7 +219,7 @@ object ManagePipelineSpec : Spek({
             kEnv.start()
         }
 
-        xcontext("send string elements, receive, transform, and send to jms") {
+        context("send string elements, receive, transform, and send to jms") {
 
             it("should receive ${dataStr.size} string elements, transformed to uppercase") {
 
@@ -241,7 +246,7 @@ object ManagePipelineSpec : Spek({
             }
         }
 
-        xcontext("send integer elements, receive, transform, and send to jms") {
+        context("send integer elements, receive, transform, and send to jms") {
 
             it("should receive ${dataInt.size} integer elements, transformed to square") {
 
@@ -265,7 +270,7 @@ object ManagePipelineSpec : Spek({
             }
         }
 
-        xcontext("send avro elements, receive, transform, and send to jms") {
+        context("send avro elements, receive, transform, and send to jms") {
 
             it("should receive ${dataAvro.size} avro elements, transformed to toString") {
 
@@ -291,7 +296,7 @@ object ManagePipelineSpec : Spek({
             }
         }
 
-        xcontext("send avro ext. attachment elements, receive, transform, and send to jms") {
+        context("send avro ext. attachment elements, receive, transform, and send to jms") {
 
             it("should receive ${dataMusic.size} elements, transformed to html") {
 
@@ -360,7 +365,7 @@ object ManagePipelineSpec : Spek({
                 val manager = ManagePipeline.init<String,GenericRecord>(
                         kCDetailsAvro,
                         ExternalAttachmentToJMS(
-                                jmsDetailsIBM,
+                                jmsDetails,
                                 "src/main/resources/altinn2eifellesformat2018_03_16.xsl"))
                         .manageAsync()
 
@@ -369,21 +374,18 @@ object ManagePipelineSpec : Spek({
                         "key").produceAsync(dataOther)
 
                 runBlocking {
-                    try {
+                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
 
                         withTimeoutOrNull(patienceLimit) {
-                            while (manager.isActive) delay(waitPatience)
+                            while (eMQ.queue.size < dataOther.size && manager.isActive) delay(waitPatience)
                         }
 
                         producer.cancelAndJoin()
                         manager.cancelAndJoin()
 
-                        true
+                        eMQ.queue.size
                     }
-                    catch(e: Exception) {
-                        false
-                    }
-                    } shouldEqual true
+                } shouldEqual dataOther.size
             }
         }
 
