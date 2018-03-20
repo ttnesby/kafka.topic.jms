@@ -11,8 +11,8 @@ import javax.xml.stream.events.XMLEvent
  * See OnlineBatchReceiver.wsdl, OnlineBatchReceiver.xsd and genericbatch<version>.xsd
  *
  * In addition, there are more pragmatic restrictions according to how things are working today
- *  - Assuming only one DataBatch/DataUnits/DataUnit - ref genericbatch
- *  - Assuming only one Attachments/Attachment - ref genericbatch
+ *  - Assuming only one DataBatch/DataUnits/DataUnit - ref genericbatch with multiple
+ *  - Assuming only one Attachments/Attachment - ref genericbatch with multiple
  *
  * @param xmlFile is a string containing the batch from OnlineBatchReceiver.xsd
  * @constructor creates an object with public properties
@@ -31,7 +31,8 @@ import javax.xml.stream.events.XMLEvent
  * - 2913, 2, Oppfolgingsplan_Altinn.xsd
  * - NavOppfPlan, rapportering_sykemeldte, sbl_oppfolgingsplan_4.xsd
  * - 2896, 87, Bankkontonummer_M.xsd
- *
+ * - 4711, 1, Maalekort
+ * - 4796, 1, Barnehageliste
  */
 class XMLExtractor(xmlFile: String) {
 

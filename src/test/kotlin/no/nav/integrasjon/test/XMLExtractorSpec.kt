@@ -9,9 +9,6 @@ import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.context
 import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Paths
 
 object XMLExtractorSpec : Spek({
 
@@ -67,9 +64,11 @@ object XMLExtractorSpec : Spek({
             }
 
             // oppfolging
-            it("navoppfplan_... should contain non-empty ServiceCode, Reference, FormData, OrgNo and attachment") {
+            it("navoppfplan_... should contain non-empty ServiceCode, Reference, FormData, " +
+                    "OrgNo and attachment") {
 
-                val xmlFile = getFileAsString("src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml")
+                val xmlFile = getFileAsString(
+                        "src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml")
 
                 val ex = XMLExtractor(xmlFile)
 
@@ -85,6 +84,7 @@ object XMLExtractorSpec : Spek({
                 ex.orgNo shouldBeEqualTo "90012345"
             }
 
+            // bankkontonr
             it("2896_87 should contain non-empty ServiceCode, Reference, FormData, OrgNo and attachment") {
 
                 val xmlFile = getFileAsString("src/test/resources/bankkontonummer_2896_87.xml")
@@ -103,7 +103,8 @@ object XMLExtractorSpec : Spek({
                 ex.orgNo shouldBeEqualTo "973094718"
             }
 
-            it("4711_01 should contain non-empty ServiceCode, Reference, FormData") {
+            // maalekort
+            it("4711_01 should contain non-empty ServiceCode, Reference, FormData and attach.") {
 
                 val xmlFile = getFileAsString("src/test/resources/maalekort_4711_01.xml")
 
@@ -114,15 +115,16 @@ object XMLExtractorSpec : Spek({
                 ex.serviceCode shouldBeEqualTo "4711"
                 ex.reference shouldBeEqualTo "77424064"
                 ex.formData.isNotEmpty() shouldEqualTo true
-                ex.attachment.archiveReference shouldBeEqualTo ""
-                ex.attachment.fileName shouldBeEqualTo ""
-                ex.attachment.fileContent shouldBeEqualTo ""
+                ex.attachment.archiveReference shouldBeEqualTo "AR186469935"
+                ex.attachment.fileName shouldBeEqualTo "PDF_186469935.pdf"
+                ex.attachment.fileContent.isNotEmpty() shouldEqualTo true
                 ex.orgNo shouldBeEqualTo ""
             }
 
-            it("4795_01 should contain non-empty ServiceCode, Reference, FormData") {
+            // barnehageliste
+            it("4795_01 should contain non-empty ServiceCode, Reference, FormData and attach.") {
 
-                val xmlFile = getFileAsString("src/test/resources/maalekort_4711_01.xml")
+                val xmlFile = getFileAsString("src/test/resources/barnehageliste_4795_01.xml")
 
                 val ex = XMLExtractor(xmlFile)
 
@@ -131,9 +133,9 @@ object XMLExtractorSpec : Spek({
                 ex.serviceCode shouldBeEqualTo "4795"
                 ex.reference shouldBeEqualTo "77424064"
                 ex.formData.isNotEmpty() shouldEqualTo true
-                ex.attachment.archiveReference shouldBeEqualTo ""
-                ex.attachment.fileName shouldBeEqualTo ""
-                ex.attachment.fileContent shouldBeEqualTo ""
+                ex.attachment.archiveReference shouldBeEqualTo "AR186469935"
+                ex.attachment.fileName shouldBeEqualTo "PDF_186469935.pdf"
+                ex.attachment.fileContent.isNotEmpty() shouldEqualTo  true
                 ex.orgNo shouldBeEqualTo ""
             }
         }

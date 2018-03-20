@@ -1,34 +1,32 @@
+@file:Suppress("UNCHECKED_CAST")
+
 package no.nav.integrasjon.test
 
 import kotlinx.coroutines.experimental.*
 import no.nav.common.KafkaEnvironment
-import no.nav.integrasjon.jms.ExternalAttachmentToJMS
 import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.jms.JMSTextMessageWriter
 import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaEvents
 import no.nav.integrasjon.kafka.KafkaTopicConsumer
 import no.nav.integrasjon.manager.ManagePipeline
+import no.nav.integrasjon.test.utils.D.kPData
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import no.nav.integrasjon.test.utils.KafkaTopicProducer
-import no.nav.integrasjon.test.utils.getFileAsString
+import no.nav.integrasjon.test.utils.produceToJMSMP
 import org.amshove.kluent.shouldContainAll
 import org.amshove.kluent.shouldEqual
 import org.amshove.kluent.shouldEqualTo
 import org.apache.activemq.ActiveMQConnectionFactory
-import org.apache.avro.Schema
-import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.*
-import java.io.File
 import java.util.*
 import javax.jms.TextMessage
 
 
 object ManagePipelineSpec : Spek({
-
 
     // create the topics to be created in kafka env
     val topics = KafkaEvents.values().map { KafkaTopicConsumer.event2Topic(it) }
@@ -50,7 +48,6 @@ object ManagePipelineSpec : Spek({
                 100
         )
     }
-
 
     val jmsDetails = JMSProperties(
             ActiveMQConnectionFactory("vm://localhost?broker.persistent=false"),
@@ -83,91 +80,6 @@ object ManagePipelineSpec : Spek({
                 )
     }
 
-    val kPData = mutableMapOf<KafkaEvents, List<Any>>()
-
-    kPData[KafkaEvents.STRING] = (1..100).map {"data-$it"}
-    kPData[KafkaEvents.INT] = (1..100).map { it }
-
-    val schema = Schema.Parser().parse(File("src/main/resources/external_attachment.avsc"))
-
-    kPData[KafkaEvents.AVRO] = (1..100).map {
-        GenericData.Record(schema).apply {
-            put("batch", "batch-$it")
-            put("sc", "sc-$it")
-            put("sec", "sec-$it")
-            put("archRef", "archRef-$it")
-        }
-    }
-
-    kPData[KafkaEvents.MUSIC] = (1..100).map {
-        GenericData.Record(schema).apply {
-            put("batch", getFileAsString("src/test/resources/musicCatalog.xml"))
-            put("sc", "TESTONLY")
-            put("sec", "sec-$it")
-            put("archRef", "archRef-$it")
-        }
-    }
-
-    val dataOppf = mutableListOf<GenericRecord>()
-
-     (1..25).forEach {
-         dataOppf.add(GenericData.Record(schema).apply {
-            put("batch", getFileAsString("src/test/resources/oppfolging_2913_02.xml"))
-            put("sc","2913")
-            put("sec","2")
-            put("archRef","test")
-         })
-
-         dataOppf.add(GenericData.Record(schema).apply {
-             put("batch", getFileAsString("src/test/resources/oppfolging_2913_03.xml"))
-             put("sc","2913")
-             put("sec","3")
-             put("archRef","test")
-         })
-
-         dataOppf.add(GenericData.Record(schema).apply {
-             put("batch", getFileAsString("src/test/resources/oppfolging_2913_04.xml"))
-             put("sc","2913")
-             put("sec","4")
-             put("archRef","test")
-         })
-
-         dataOppf.add(GenericData.Record(schema).apply {
-             put("batch", getFileAsString("src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml"))
-             put("sc","NavOppfPlan")
-             put("sec","rapportering_sykemeldte")
-             put("archRef","test")
-         })
-    }
-
-    kPData[KafkaEvents.OPPFOLGINGSPLAN] = dataOppf
-
-    kPData[KafkaEvents.BANKKONTONR] = (1..100).map {
-        GenericData.Record(schema).apply {
-            put("batch", getFileAsString("src/test/resources/bankkontonummer_2896_87.xml"))
-            put("sc","2896")
-            put("sec","87")
-            put("archRef","test")
-        }
-    }
-
-    kPData[KafkaEvents.MAALEKORT] = (1..100).map {
-        GenericData.Record(schema).apply {
-            put("batch", getFileAsString("src/test/resources/maalekort_4711_01.xml"))
-            put("sc", "4711")
-            put("sec", "1")
-            put("archRef", "test")
-        }
-    }
-
-    kPData[KafkaEvents.BARNEHAGELISTE] = (1..100).map {
-        GenericData.Record(schema).apply {
-            put("batch", getFileAsString("src/test/resources/barnehageliste_4795_01.xml"))
-            put("sc", "4795")
-            put("sec", "1")
-            put("archRef", "test")
-        }
-    }
 
     val waitPatience = 100L
     val patienceLimit = 7_000L
@@ -181,12 +93,14 @@ object ManagePipelineSpec : Spek({
 
         context("send string elements, receive, transform, and send to jms") {
 
-            it("should receive ${dataStr.size} string elements, transformed to uppercase") {
+            it("should receive ${kPData[KafkaEvents.STRING]!!.size} string elements, transformed to uppercase") {
+
+                val data = kPData[KafkaEvents.STRING]!! as List<String>
 
                 val manager = ManagePipeline.init<String,String>(
                         kCPPType[KafkaEvents.STRING]!!, TrfString()).manageAsync()
                 val producer = KafkaTopicProducer.init<String,String>(
-                        kCPPType[KafkaEvents.STRING]!!, "key").produceAsync(dataStr)
+                        kCPPType[KafkaEvents.STRING]!!, "key").produceAsync(data)
 
                 // helper object to get jms queue size
 
@@ -196,7 +110,7 @@ object ManagePipelineSpec : Spek({
                     EmbeddedActiveMQ(jmsDetails).use { eMQ ->
 
                         withTimeoutOrNull(patienceLimit) {
-                            while (eMQ.queue.size < dataStr.size && manager.isActive) delay(waitPatience)
+                            while (eMQ.queue.size < data.size && manager.isActive) delay(waitPatience)
                         }
 
                         producer.cancelAndJoin()
@@ -204,24 +118,26 @@ object ManagePipelineSpec : Spek({
 
                         eMQ.queue.map { (it as TextMessage).text }
                     }
-                } shouldContainAll dataStr.map { it.toUpperCase() }
+                } shouldContainAll data.map { it.toUpperCase() }
             }
         }
 
         context("send integer elements, receive, transform, and send to jms") {
 
-            it("should receive ${dataInt.size} integer elements, transformed to square") {
+            it("should receive ${kPData[KafkaEvents.INT]!!.size} integer elements, transformed to square") {
+
+                val data = kPData[KafkaEvents.INT]!! as List<Int>
 
                 val manager = ManagePipeline.init<String,Int>(kCPPType[KafkaEvents.INT]!!, TrfInt()).manageAsync()
                 val producer = KafkaTopicProducer.init<String,Int>(
-                        kCPPType[KafkaEvents.INT]!!, "key").produceAsync(dataInt)
+                        kCPPType[KafkaEvents.INT]!!, "key").produceAsync(data)
 
                 runBlocking {
 
                     EmbeddedActiveMQ(jmsDetails).use { eMQ ->
 
                         withTimeoutOrNull(patienceLimit) {
-                            while (eMQ.queue.size < dataInt.size && manager.isActive) delay(waitPatience)
+                            while (eMQ.queue.size < data.size && manager.isActive) delay(waitPatience)
                         }
 
                         producer.cancelAndJoin()
@@ -229,26 +145,28 @@ object ManagePipelineSpec : Spek({
 
                         eMQ.queue.map { (it as TextMessage).text.toInt() }
                     }
-                } shouldContainAll dataInt.map { it * it }
+                } shouldContainAll data.map { it * it }
             }
         }
 
         context("send avro elements, receive, transform, and send to jms") {
 
-            it("should receive ${dataAvro.size} avro elements, transformed to toString") {
+            it("should receive ${kPData[KafkaEvents.AVRO]!!.size} avro elements, transformed to toString") {
+
+                val data = kPData[KafkaEvents.AVRO]!! as List<GenericRecord>
 
                 val manager = ManagePipeline.init<String,GenericRecord>(
                         kCPPType[KafkaEvents.AVRO]!!, TrfAvro()).manageAsync()
                 val producer = KafkaTopicProducer.init<String,GenericRecord>(
                         kCPPType[KafkaEvents.AVRO]!!,
-                        "key").produceAsync(dataAvro)
+                        "key").produceAsync(data)
 
                 runBlocking {
 
                     EmbeddedActiveMQ(jmsDetails).use { eMQ ->
 
                         withTimeoutOrNull(patienceLimit) {
-                            while (eMQ.queue.size < dataAvro.size && manager.isActive) delay(waitPatience)
+                            while (eMQ.queue.size < data.size && manager.isActive) delay(waitPatience)
                         }
 
                         producer.cancelAndJoin()
@@ -256,100 +174,77 @@ object ManagePipelineSpec : Spek({
 
                         eMQ.queue.map { (it as TextMessage).text }
                     }
-                } shouldContainAll dataAvro.map { it.toString()  }
+                } shouldContainAll data.map { it.toString()  }
             }
         }
 
-        context("send music avro ext. attachment elements, receive, transform, and send to jms") {
+        context("send music elements, receive, transform, and send to jms") {
 
-            it("should receive ${dataMusic.size} elements, transformed to html") {
+            it("should receive ${kPData[KafkaEvents.MUSIC]!!.size} music, transformed to html") {
 
-                val manager = ManagePipeline.init<String,GenericRecord>(
+                val data = kPData[KafkaEvents.MUSIC]!! as List<GenericRecord>
+
+                produceToJMSMP(
                         kCPPType[KafkaEvents.MUSIC]!!,
-                        ExternalAttachmentToJMS(
-                                jmsDetails,
-                                KafkaEvents.MUSIC))
-                        .manageAsync()
-
-                val producer = KafkaTopicProducer.init<String,GenericRecord>(
-                        kCPPType[KafkaEvents.MUSIC]!!,
-                        "key").produceAsync(dataMusic)
-
-                runBlocking {
-
-                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
-
-                        withTimeoutOrNull(patienceLimit) {
-                            while (eMQ.queue.size < dataMusic.size && manager.isActive) delay(waitPatience)
-                        }
-
-                        producer.cancelAndJoin()
-                        manager.cancelAndJoin()
-
-                        eMQ.queue.size
-                    }
-                } shouldEqualTo  dataMusic.size
+                        jmsDetails,
+                        KafkaEvents.MUSIC,
+                        data
+                ) shouldEqualTo  data.size
             }
         }
 
-        context("send altinn avro ext. attachment elements, receive, transform " +
-                "and send to jms") {
+        context("send altinn elements, receive, transform and send to jms") {
 
-            it("should receive ${dataEia.size} EIA elements, transformed to xml") {
+            it("should receive ${kPData[KafkaEvents.OPPFOLGINGSPLAN]!!.size} oppfolg., " +
+                    "transformed to xml") {
 
-                val manager = ManagePipeline.init<String,GenericRecord>(
+                val data = kPData[KafkaEvents.OPPFOLGINGSPLAN]!! as List<GenericRecord>
+
+                produceToJMSMP(
                         kCPPType[KafkaEvents.OPPFOLGINGSPLAN]!!,
-                        ExternalAttachmentToJMS(
-                                jmsDetails,
-                                KafkaEvents.OPPFOLGINGSPLAN))
-                        .manageAsync()
-
-                val producer = KafkaTopicProducer.init<String,GenericRecord>(
-                        kCPPType[KafkaEvents.OPPFOLGINGSPLAN]!!,
-                        "key").produceAsync(dataEia)
-
-                runBlocking {
-
-                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
-
-                        withTimeoutOrNull(patienceLimit) {
-                            while (eMQ.queue.size < dataEia.size && manager.isActive) delay(waitPatience)
-                        }
-
-                        producer.cancelAndJoin()
-                        manager.cancelAndJoin()
-
-                        eMQ.queue.size
-                    }
-                } shouldEqualTo  dataEia.size
+                        jmsDetails,
+                        KafkaEvents.OPPFOLGINGSPLAN,
+                        data
+                ) shouldEqualTo  data.size
             }
 
-            it("should receive ${dataOther.size} other elements, transformed to xml") {
+            it("should receive ${kPData[KafkaEvents.BANKKONTONR]!!.size} bankkontonr, " +
+                    "transformed to xml") {
 
-                val manager = ManagePipeline.init<String,GenericRecord>(
+                val data = kPData[KafkaEvents.BANKKONTONR]!! as List<GenericRecord>
+
+                produceToJMSMP(
+                        kCPPType[KafkaEvents.BANKKONTONR]!!,
+                        jmsDetails,
+                        KafkaEvents.BANKKONTONR,
+                        data
+                ) shouldEqual data.size
+            }
+
+            it("should receive ${kPData[KafkaEvents.MAALEKORT]!!.size} maalekort, " +
+                    "transformed to xml") {
+
+                val data = kPData[KafkaEvents.MAALEKORT]!! as List<GenericRecord>
+
+                produceToJMSMP(
                         kCPPType[KafkaEvents.MAALEKORT]!!,
-                        ExternalAttachmentToJMS(
-                                jmsDetails,
-                                KafkaEvents.MAALEKORT))
-                        .manageAsync()
+                        jmsDetails,
+                        KafkaEvents.MAALEKORT,
+                        data
+                ) shouldEqual data.size
+            }
 
-                val producer = KafkaTopicProducer.init<String,GenericRecord>(
-                        kCPPType[KafkaEvents.MAALEKORT]!!,
-                        "key").produceAsync(dataOther)
+            it("should receive ${kPData[KafkaEvents.BARNEHAGELISTE]!!.size} barnehageliste, " +
+                    "transformed to xml") {
 
-                runBlocking {
-                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                val data = kPData[KafkaEvents.BARNEHAGELISTE]!! as List<GenericRecord>
 
-                        withTimeoutOrNull(patienceLimit) {
-                            while (eMQ.queue.size < dataOther.size && manager.isActive) delay(waitPatience)
-                        }
-
-                        producer.cancelAndJoin()
-                        manager.cancelAndJoin()
-
-                        eMQ.queue.size
-                    }
-                } shouldEqual dataOther.size
+                produceToJMSMP(
+                        kCPPType[KafkaEvents.BARNEHAGELISTE]!!,
+                        jmsDetails,
+                        KafkaEvents.BARNEHAGELISTE,
+                        data
+                ) shouldEqual data.size
             }
         }
 

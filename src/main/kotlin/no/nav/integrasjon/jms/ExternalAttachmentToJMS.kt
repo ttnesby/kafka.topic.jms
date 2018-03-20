@@ -13,7 +13,7 @@ class ExternalAttachmentToJMS(
         KafkaEvents.OPPFOLGINGSPLAN -> "src/main/resources/altinn2eifellesformat2018_03_16.xsl"
         KafkaEvents.BANKKONTONR -> "src/main/resources/altinn2eifellesformat2018_03_16.xsl"
         KafkaEvents.MUSIC -> "src/test/resources/musicCatalog.xsl"
-        else -> ""
+        else -> "src/main/resources/dummy.xsl" // will not use transform
     }
 
     // Substituted TransformerFactory.newInstance() with saxon,
