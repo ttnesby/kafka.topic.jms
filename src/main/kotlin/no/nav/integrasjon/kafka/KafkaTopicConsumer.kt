@@ -15,17 +15,18 @@ import org.apache.kafka.common.TopicPartition
 import java.util.*
 import kotlin.reflect.full.starProjectedType
 
-class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails) {
+class KafkaTopicConsumer<K, out V>(private val clientProperties: KafkaClientProperties) {
 
     fun consumeAsync(
             toDownstream: SendChannel<V>,
             fromDownStream: ReceiveChannel<Status>,
             toManager: SendChannel<Status>) = async {
         try {
-            KafkaConsumer<K, V>(clientDetails.baseProps)
+            KafkaConsumer<K, V>(clientProperties.baseProps)
                     .apply {
                         // be a loner - independent of group logic by reading from all partitions for topic
-                        assign(partitionsFor(clientDetails.topic).map { TopicPartition(it.topic(),it.partition()) })
+                        assign(partitionsFor(event2Topic(clientProperties.kafkaEvent))
+                                .map { TopicPartition(it.topic(),it.partition()) })
                     }
                     .use { c ->
 
@@ -36,10 +37,11 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
 
                         while (isActive && allGood) {
 
-                            c.poll(clientDetails.pollTimeout).forEach { e ->
+                            c.poll(clientProperties.pollTimeout).forEach { e ->
 
-                                log.info {"Polled event from kafka topic ${e.topic()}, " +
-                                        "partition ${e.partition()} and offset ${e.offset()}" }
+                                val tpo = "topic ${e.topic()}, partition ${e.partition()} and offset ${e.offset()}"
+
+                                log.info {"Polled event from kafka $tpo"}
 
                                 log.info { "Send event downstream and wait for response" }
                                 toDownstream.send(e.value())
@@ -48,21 +50,19 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
                                 // wait for feedback from pipeline
                                 when (fromDownStream.receive()) {
                                     Ready -> try {
-                                        log.info { "Got Ready from downstream, will commit" }
+                                        log.info { "Got Ready from downstream, trying commit" }
                                         c.commitSync()
-                                        log.info { "Event topic ${e.topic()}, partition ${e.partition()} and " +
-                                                "offset ${e.offset()} is committed" }
+                                        log.info { "Event $tpo is committed" }
                                     }
                                     catch (ex: CommitFailedException) {
                                         log.error("CommitFailedException", ex)
-                                        log.info { "Event topic ${e.topic()}, partition ${e.partition()} and " +
-                                                "offset ${e.offset()} NOT COMMITTED!" }
+                                        log.error("Event $tpo NOT COMMITTED! Expect duplicates")
                                         log.error("Prepare for shutdown")
                                         allGood = false
                                     }
                                     Problem -> {
                                         // problems downstream
-                                        log.error { "Got Problem from downstream, prepare for shutdown" }
+                                        log.error("Got Problem from downstream, prepare for shutdown")
                                         allGood = false
 
                                     }
@@ -73,7 +73,7 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
         }
         catch (e: Exception) {
             when (e) {
-                is CancellationException -> {/* it's ok*/ }
+                is CancellationException -> {/* it's ok to be cancelled by manager*/ }
                 else -> log.error("Exception", e)
             }
         }
@@ -93,14 +93,14 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
 
         private val log = KotlinLogging.logger {  }
 
-        inline fun <reified K, reified V> init(clientDetails: KafkaClientDetails) = KafkaTopicConsumer<K, V>(
-                KafkaClientDetails(
-                        consumerInjection<K, V>(clientDetails.baseProps),
-                        clientDetails.topic,
-                        clientDetails.pollTimeout
+        inline fun <reified K, reified V> init(clientProperties: KafkaClientProperties) = KafkaTopicConsumer<K, V>(
+                KafkaClientProperties(
+                        propertiesInjection<K, V>(clientProperties.baseProps),
+                        clientProperties.kafkaEvent,
+                        clientProperties.pollTimeout
                 ))
 
-        inline fun <reified K, reified V> consumerInjection(baseProps: Properties) = baseProps.apply {
+        inline fun <reified K, reified V> propertiesInjection(baseProps: Properties) = baseProps.apply {
             set(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(K::class.starProjectedType))
             set(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(V::class.starProjectedType))
 
@@ -111,7 +111,17 @@ class KafkaTopicConsumer<K, out V>(private val clientDetails: KafkaClientDetails
             set(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
             // poll only one record of
             set(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
-            //TODO - must set max.bytes to at least 5 MB
+        }
+
+        fun event2Topic(kafkaEvent: KafkaEvents): String = when (kafkaEvent) {
+            KafkaEvents.OPPFOLGINGSPLAN -> "oppfolgingplan"
+            KafkaEvents.BANKKONTONR -> "bankkontonr"
+            KafkaEvents.MAALEKORT -> "maalekort"
+            KafkaEvents.BARNEHAGELISTE -> "barnehageliste"
+            KafkaEvents.STRING -> "string"
+            KafkaEvents.INT -> "int"
+            KafkaEvents.AVRO -> "avro"
+            KafkaEvents.MUSIC -> "music"
         }
     }
 }

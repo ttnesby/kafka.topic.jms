@@ -3,7 +3,8 @@ package no.nav.integrasjon.test.utils
 import kotlinx.coroutines.experimental.CancellationException
 import kotlinx.coroutines.experimental.async
 import mu.KotlinLogging
-import no.nav.integrasjon.kafka.KafkaClientDetails
+import no.nav.integrasjon.kafka.KafkaClientProperties
+import no.nav.integrasjon.kafka.KafkaTopicConsumer
 import no.nav.integrasjon.kafka.getKafkaSerializer
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerConfig
@@ -12,7 +13,9 @@ import java.util.*
 import kotlin.reflect.full.starProjectedType
 
 
-class KafkaTopicProducer<K, in V>(private val clientDetails: KafkaClientDetails, private val key: K) {
+class KafkaTopicProducer<K, in V>(private val clientProperties: KafkaClientProperties, private val key: K) {
+
+    private val topic = KafkaTopicConsumer.event2Topic(clientProperties.kafkaEvent)
 
     fun produceAsync(data: List<V>) = async {
 
@@ -20,10 +23,10 @@ class KafkaTopicProducer<K, in V>(private val clientDetails: KafkaClientDetails,
             // best effort to send data synchronously
             log.info("@start of produceAsync")
 
-            KafkaProducer<K, V>(clientDetails.baseProps).use { p ->
+            KafkaProducer<K, V>(clientProperties.baseProps).use { p ->
                 data.forEach { d ->
-                    p.send(ProducerRecord<K, V>(clientDetails.topic, null, d)).get()
-                    log.debug { "Sent record to kafka topic ${clientDetails.topic}" }
+                    p.send(ProducerRecord<K, V>(topic, null, d)).get()
+                    log.debug { "Sent record to kafka topic $topic" }
                 }
             }
         }
@@ -42,11 +45,11 @@ class KafkaTopicProducer<K, in V>(private val clientDetails: KafkaClientDetails,
         private val log = KotlinLogging.logger {  }
 
         inline fun <reified K, reified V> init(
-                clientDetails: KafkaClientDetails,
+                clientProperties: KafkaClientProperties,
                 key: K) = KafkaTopicProducer<K,V>(
-                KafkaClientDetails(
-                        producerInjection<K,V>(clientDetails.baseProps),
-                        clientDetails.topic),
+                KafkaClientProperties(
+                        producerInjection<K,V>(clientProperties.baseProps),
+                        clientProperties.kafkaEvent),
                 key)
 
         inline fun <reified K, reified V> producerInjection(baseProps: Properties) = baseProps.apply {

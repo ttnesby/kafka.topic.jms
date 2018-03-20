@@ -11,15 +11,15 @@ import no.nav.integrasjon.manager.Status
 import javax.jms.*
 import kotlin.IllegalStateException
 
-abstract class JMSTextMessageWriter<in V>(private val jmsDetails: JMSDetails) {
+abstract class JMSTextMessageWriter<in V>(private val jmsProperties: JMSProperties) {
 
-    private val connection = jmsDetails.connFactory.createConnection(jmsDetails.username,jmsDetails.password)
+    private val connection = jmsProperties.connFactory.createConnection(jmsProperties.username, jmsProperties.password)
             .apply { this.start() }
 
     protected val session = connection?.createSession(false, Session.AUTO_ACKNOWLEDGE) ?:
             throw IllegalStateException("Cannot create session in JMSTextMessageWriter!")
 
-    private val producer = session.createProducer(session.createQueue(jmsDetails.queueName))
+    private val producer = session.createProducer(session.createQueue(jmsProperties.queueName))
 
     data class Result(val status: Boolean = false, val txtMsg: TextMessage)
 
@@ -29,7 +29,7 @@ abstract class JMSTextMessageWriter<in V>(private val jmsDetails: JMSDetails) {
             toManager: SendChannel<Status>) = async {
 
         try {
-            connection.use { c ->
+            connection.use { _ ->
 
                 var allGood = true
                 toManager.send(Ready)
@@ -42,7 +42,6 @@ abstract class JMSTextMessageWriter<in V>(private val jmsDetails: JMSDetails) {
                     fromUpstream.receive().also { e ->
                         try {
                             log.info { "Received event from upstream" }
-                            log.debug {"Received event: ${e.toString()}" }
 
                             log.info { "Invoke transformation" }
                             val result = transform(e)
@@ -50,9 +49,8 @@ abstract class JMSTextMessageWriter<in V>(private val jmsDetails: JMSDetails) {
                             when(result.status) {
                                 true -> {
                                     log.info { "Transformation to JMS TextMessage ok" }
-                                    log.debug {"Transformation ok: ${result.txtMsg.text}" }
 
-                                    log.info { "Send TextMessage to JMS backend ${jmsDetails.queueName}" }
+                                    log.info { "Send TextMessage to JMS backend ${jmsProperties.queueName}" }
                                     producer.send(result.txtMsg)
 
                                     log.info { "Send to JMS completed" }
@@ -83,7 +81,7 @@ abstract class JMSTextMessageWriter<in V>(private val jmsDetails: JMSDetails) {
         }
         catch (e: Exception) {
             when(e) {
-                is CancellationException -> {/* it's ok*/}
+                is CancellationException -> {/* it's ok to be cancelled by manager*/}
                 else -> log.error("Exception", e)
             }
         } // JMSSecurityException, JMSException, ClosedReceiveChannelException

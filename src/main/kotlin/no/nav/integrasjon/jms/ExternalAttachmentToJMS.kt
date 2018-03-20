@@ -1,18 +1,25 @@
 package no.nav.integrasjon.jms
 
+import no.nav.integrasjon.kafka.KafkaEvents
 import org.apache.avro.generic.GenericRecord
 import java.io.StringReader
 import java.io.StringWriter
 
 class ExternalAttachmentToJMS(
-        jmsDetails: JMSDetails,
-        xsltFilePath: String) : JMSTextMessageWriter<GenericRecord>(jmsDetails) {
+        jmsProperties: JMSProperties,
+        kafkaEvent: KafkaEvents) : JMSTextMessageWriter<GenericRecord>(jmsProperties) {
+
+    private val xsltFilePath = when (kafkaEvent) {
+        KafkaEvents.OPPFOLGINGSPLAN -> "src/main/resources/altinn2eifellesformat2018_03_16.xsl"
+        KafkaEvents.BANKKONTONR -> "src/main/resources/altinn2eifellesformat2018_03_16.xsl"
+        KafkaEvents.MUSIC -> "src/test/resources/musicCatalog.xsl"
+        else -> ""
+    }
 
     // Substituted TransformerFactory.newInstance() with saxon,
     // support for xsl version 2 and 3 with better support for diverse functions
     private val xFactory = net.sf.saxon.TransformerFactoryImpl()
-    private val xslt = xFactory.newTransformer(
-            javax.xml.transform.stream.StreamSource(xsltFilePath))
+    private val xslt = xFactory.newTransformer(javax.xml.transform.stream.StreamSource(xsltFilePath))
 
     override fun transform(event: GenericRecord): Result {
 
@@ -21,8 +28,8 @@ class ExternalAttachmentToJMS(
 
         return when(event["sc"].toString()) {
 
-            // TESTONLY
-            "TESTONLY" -> xslTransform(xml, xe)
+            // TESTONLY - see test cases
+            "TESTONLY" -> xslTransform(xml)
 
             // bankkontonummer - no file attachment even though it's available...
             "2896" -> {
@@ -36,7 +43,7 @@ class ExternalAttachmentToJMS(
                     setParameter("OrgNo", xe.orgNo)
                     setParameter("Guuid", java.util.UUID.randomUUID().toString())
                 }
-                xslTransform(xml, xe)
+                xslTransform(xml)
             }
 
             // Oppfolgingsplan service edition code 2,3,4 - no attachment available
@@ -51,7 +58,7 @@ class ExternalAttachmentToJMS(
                     setParameter("OrgNo", xe.orgNo)
                     setParameter("Guuid", java.util.UUID.randomUUID().toString())
                 }
-                xslTransform(xml, xe)
+                xslTransform(xml)
             }
 
             // Oppfolgingsplan service edition code rapportering-sykmeldte - with attachment
@@ -66,7 +73,7 @@ class ExternalAttachmentToJMS(
                     setParameter("OrgNo", xe.orgNo)
                     setParameter("Guuid", java.util.UUID.randomUUID().toString())
                 }
-                xslTransform(xml, xe)
+                xslTransform(xml)
             }
 
             // Maalekort
@@ -86,12 +93,10 @@ class ExternalAttachmentToJMS(
                         txtMsg = session.createTextMessage().apply { this.text = "Unknown service code!" }
                 )
             }
-
-
         }
     }
 
-    private fun xslTransform(xml: String, xe: XMLExtractor): Result {
+    private fun xslTransform(xml: String): Result {
 
         val resultWriter = StringWriter()
 
@@ -110,7 +115,7 @@ class ExternalAttachmentToJMS(
             log.error("Exception during transform", e)
             Result(
                     status = false,
-                    txtMsg = session.createTextMessage().apply { this.text = "Exception!" }
+                    txtMsg = session.createTextMessage().apply { this.text = "Transform exception!" }
             )
         }
     }

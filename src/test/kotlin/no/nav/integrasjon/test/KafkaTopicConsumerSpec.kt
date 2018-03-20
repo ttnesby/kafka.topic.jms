@@ -4,9 +4,9 @@ import kotlinx.coroutines.experimental.cancelAndJoin
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
 import kotlinx.coroutines.experimental.withTimeoutOrNull
-import mu.KotlinLogging
 import no.nav.common.KafkaEnvironment
-import no.nav.integrasjon.kafka.KafkaClientDetails
+import no.nav.integrasjon.kafka.KafkaClientProperties
+import no.nav.integrasjon.kafka.KafkaEvents
 import no.nav.integrasjon.kafka.KafkaTopicConsumer
 import no.nav.integrasjon.manager.Channels
 import no.nav.integrasjon.manager.Problem
@@ -18,7 +18,6 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.producer.ProducerConfig
 import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.context
 import org.jetbrains.spek.api.dsl.describe
@@ -28,71 +27,35 @@ import java.util.*
 
 object KafkaTopicConsumerSpec : Spek({
 
-    val log = KotlinLogging.logger {  }
+    //val log = KotlinLogging.logger {  }
 
-    val topicStr = "testString"
-    val topicInt = "testInt"
-    val topicAvro = "testAvro"
+    // create the topics to be created in kafka env
+    val topics = KafkaEvents.values().map { KafkaTopicConsumer.event2Topic(it) }
 
-    val kEnv = KafkaEnvironment(topics = listOf(topicStr,topicInt,topicAvro), withSchemaRegistry = true)
+    val kEnv = KafkaEnvironment(topics = topics, withSchemaRegistry = true)
 
-    val kCDetailsStr = KafkaClientDetails(
-            Properties().apply {
-                set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
-            },
-            topicStr,
-            100
-    )
+    // create a map of non-production kafka client properties
 
-    val kCDetailsInt = KafkaClientDetails(
-            Properties().apply {
-                set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
-            },
-            topicInt,
-            100
-    )
+    val kCPPType = mutableMapOf<KafkaEvents, KafkaClientProperties>()
 
-    val kCDetailsAvro = KafkaClientDetails(
-            Properties().apply {
-                set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
-                set("schema.registry.url",kEnv.serverPark.schemaregistry.url)
-            },
-            topicAvro,
-            100
-    )
+    KafkaEvents.values().filter { !it.value.production }.forEach {
 
-    val kPDetailsStr = KafkaClientDetails(
-            Properties().apply {
-                set(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ProducerConfig.CLIENT_ID_CONFIG, "kafkaTopicProducer")
-            },
-            topicStr
-    )
-
-    val kPDetailsInt = KafkaClientDetails(
-            Properties().apply {
-                set(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ProducerConfig.CLIENT_ID_CONFIG, "kafkaTopicProducer")
-            },
-            topicInt
-    )
-
-    val kPDetailsAvro = KafkaClientDetails(
-            Properties().apply {
-                set(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ProducerConfig.CLIENT_ID_CONFIG, "kafkaTopicProducer")
-                set("schema.registry.url",kEnv.serverPark.schemaregistry.url)
-            },
-            topicAvro
-    )
+        kCPPType[it] = KafkaClientProperties(
+                Properties().apply {
+                    set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
+                    set("schema.registry.url",kEnv.serverPark.schemaregistry.url)
+                    set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
+                    },
+                    it,
+                    100
+                )
+    }
 
     val dataStr = (1..100).map {"data-$it"}
     val dataInt = (1..100).map { it }
 
     val schema = Schema.Parser().parse(File("src/main/resources/external_attachment.avsc"))
+
     val dataAvro = (1..100).map {
         GenericData.Record(schema).apply {
             put("batch","batch-$it")
@@ -124,14 +87,14 @@ object KafkaTopicConsumerSpec : Spek({
                     runBlocking {
 
                         // kick of asynchronous task for receiving data from kafka
-                        val consumer = KafkaTopicConsumer.init<String, String>(kCDetailsStr)
+                        val consumer = KafkaTopicConsumer.init<String, String>(kCPPType[KafkaEvents.STRING]!!)
                                 .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
 
                         if (c.toManager.receive() == Problem) return@runBlocking
 
                         //kick of asynchronous task for sending data to kafka
-                        val producer = KafkaTopicProducer.init<String,String>(kPDetailsStr, "key")
-                                .produceAsync(dataStr)
+                        val producer = KafkaTopicProducer.init<String,String>(
+                                kCPPType[KafkaEvents.STRING]!!, "key").produceAsync(dataStr)
 
                         withTimeoutOrNull(patienceLimit) {
                             while (events.size < dataStr.size && (c.toManager.poll()?.let { it } != Problem))
@@ -158,7 +121,7 @@ object KafkaTopicConsumerSpec : Spek({
                     runBlocking {
 
                         // kick of asynchronous task for receiving data from kafka
-                        val consumer = KafkaTopicConsumer.init<String, String>(kCDetailsStr)
+                        val consumer = KafkaTopicConsumer.init<String, String>(kCPPType[KafkaEvents.STRING]!!)
                                 .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
 
                         if (c.toManager.receive() == Problem) return@runBlocking
@@ -191,13 +154,13 @@ object KafkaTopicConsumerSpec : Spek({
                     runBlocking {
 
                         // kick of asynchronous task for receiving data from kafka
-                        val consumer = KafkaTopicConsumer.init<String, Int>(kCDetailsInt)
+                        val consumer = KafkaTopicConsumer.init<String, Int>(kCPPType[KafkaEvents.INT]!!)
                                 .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
 
                         if (c.toManager.receive() == Problem) return@runBlocking
 
                         //kick of asynchronous task for sending data to kafka
-                        val producer = KafkaTopicProducer.init<String,Int>(kPDetailsInt, "key")
+                        val producer = KafkaTopicProducer.init<String,Int>(kCPPType[KafkaEvents.INT]!!, "key")
                                 .produceAsync(dataInt)
 
                         withTimeoutOrNull(patienceLimit) {
@@ -225,7 +188,7 @@ object KafkaTopicConsumerSpec : Spek({
                     runBlocking {
 
                         // kick of asynchronous task for receiving data from kafka
-                        val consumer = KafkaTopicConsumer.init<String, Int>(kCDetailsInt)
+                        val consumer = KafkaTopicConsumer.init<String, Int>(kCPPType[KafkaEvents.INT]!!)
                                 .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
 
                         if (c.toManager.receive() == Problem) return@runBlocking
@@ -257,14 +220,14 @@ object KafkaTopicConsumerSpec : Spek({
                     runBlocking {
 
                         // kick of asynchronous task for receiving data from kafka
-                        val consumer = KafkaTopicConsumer.init<String, GenericRecord>(kCDetailsAvro)
+                        val consumer = KafkaTopicConsumer.init<String, GenericRecord>(kCPPType[KafkaEvents.AVRO]!!)
                                 .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
 
                         if (c.toManager.receive() == Problem) return@runBlocking
 
                         //kick of asynchronous task for sending data to kafka
-                        val producer = KafkaTopicProducer.init<String,GenericRecord>(kPDetailsAvro, "key")
-                                .produceAsync(dataAvro)
+                        val producer = KafkaTopicProducer.init<String,GenericRecord>(
+                                kCPPType[KafkaEvents.AVRO]!!, "key").produceAsync(dataAvro)
 
                         withTimeoutOrNull(patienceLimit) {
                             while (events.size < dataAvro.size && (c.toManager.poll()?.let { it } != Problem))

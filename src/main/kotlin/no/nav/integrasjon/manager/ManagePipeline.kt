@@ -3,13 +3,15 @@ package no.nav.integrasjon.manager
 import kotlinx.coroutines.experimental.*
 import mu.KotlinLogging
 import no.nav.integrasjon.jms.JMSTextMessageWriter
-import no.nav.integrasjon.kafka.KafkaClientDetails
+import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaTopicConsumer
 
 class ManagePipeline<K,V>(
         private val kafkaTopicConsumer: KafkaTopicConsumer<K, V>,
         private val jmsTextMessageWriter: JMSTextMessageWriter<V>) {
 
+    private var allGood = false
+    val isOk get() = allGood
     private val c = Channels<V>(2)
 
     fun manageAsync() = async {
@@ -36,15 +38,18 @@ class ManagePipeline<K,V>(
             return@async
         }
 
-        log.info("@start of manageAsync passive waiting")
+        log.info("@start of manageAsync - monitoring pipeline")
+
+        allGood = true
 
         try {
-            while (isActive && (c.toManager.receive().let {
-                        latestStatus = it
-                    it} != Problem)) {}
+            while (isActive && (c.toManager.receive().let { latestStatus = it;it} != Problem)) {}
         }
         finally {
-            if (latestStatus == Problem) log.error("Coroutine reported problem - shutting down everything!")
+            if (latestStatus == Problem) {
+                allGood = false
+                log.error("Pipeline reported problem - shutting down")
+            }
             withContext(NonCancellable) {
                 r.reversed().forEach { it.cancelAndJoin() }
                 c.close()
@@ -58,9 +63,9 @@ class ManagePipeline<K,V>(
         private val log = KotlinLogging.logger {  }
 
         inline fun <reified K, reified V> init(
-                clientDetails: KafkaClientDetails,
+                clientProperties: KafkaClientProperties,
                 jmsTextMessageWriter: JMSTextMessageWriter<V>): ManagePipeline<K, V> = ManagePipeline(
-                KafkaTopicConsumer.init(clientDetails),
+                KafkaTopicConsumer.init(clientProperties),
                 jmsTextMessageWriter)
     }
 }

@@ -1,5 +1,8 @@
 package no.nav.integrasjon
 
+import com.ibm.mq.jms.MQConnectionFactory
+import com.ibm.msg.client.wmq.WMQConstants
+import com.ibm.msg.client.wmq.compat.base.internal.MQC
 import io.ktor.application.*
 import io.ktor.http.ContentType
 import io.ktor.response.respondText
@@ -11,59 +14,75 @@ import io.ktor.server.netty.Netty
 import kotlinx.coroutines.experimental.cancelAndJoin
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
-import no.nav.integrasjon.jms.JMSDetails
-import org.apache.activemq.ActiveMQConnectionFactory
+import no.nav.integrasjon.jms.ExternalAttachmentToJMS
+import no.nav.integrasjon.jms.JMSProperties
+import no.nav.integrasjon.kafka.KafkaClientProperties
+import no.nav.integrasjon.kafka.KafkaEvents
+import no.nav.integrasjon.manager.ManagePipeline
 import org.apache.avro.generic.GenericRecord
-import org.apache.kafka.clients.consumer.ConsumerConfig
-import java.nio.charset.StandardCharsets
-import java.nio.file.Files
-import java.nio.file.Paths
 import java.util.*
-import javax.jms.ConnectionFactory
 
 
 fun main(args: Array<String>) {
 
+    val fp = FasitProperties()
 
-}
+    if (fp.isEmpty) throw IllegalStateException("Missing fasit properties - $fp")
 
-fun bootstrap() {
+    val prodEvents = KafkaEvents.values().filter { it.value.production }
 
-    // get kafka properties and set kafka client details
-/*
-    val kEnv = KafkaEnvironment(topics = listOf("aTopic"), withSchemaRegistry = true).apply {
-        start()
-    }
-*/
+    if (fp.kafkaEvent !in prodEvents.map { it.value.name } )
+        throw IllegalStateException("Incorrect kafka event as fasit property, ${fp.kafkaEvent} NOT IN " +
+                "${prodEvents.map { it.value.name }}")
 
-/*    val kCDetailsAvro = KafkaClientDetails(
-            Properties().apply {
-                set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
-                set("schema.registry.url",kEnv.serverPark.schemaregistry.url)
-            },
-            "aTopic"
-    )*/
-
-    // get fasit properties and make JMS connection factory with settings
-
-    val jmsDetails = JMSDetails(
-            ActiveMQConnectionFactory("vm://localhost?broker.persistent=false") as ConnectionFactory,
-            "toDownstream"
+    // TODO - how to get the kafka brokers and schema reg?
+    val kafkaProps = KafkaClientProperties(
+            Properties(), // brokers, schema reg, client id
+            KafkaEvents.valueOf(fp.kafkaEvent)
     )
 
-    // establish pipeline
+    // set relevant jms properties
+    val jmsProps = JMSProperties(
+            MQConnectionFactory().apply {
+                hostName = fp.mqHostname
+                port = fp.mqPort
+                queueManager = fp.mqQueueManagerName
+                channel = fp.mqChannel
+                transportType = WMQConstants.WMQ_CM_CLIENT
+                clientReconnectOptions = WMQConstants.WMQ_CLIENT_RECONNECT // will try to reconnect
+                clientReconnectTimeout = 300 // reconnection attempts for 5 minutes
+                ccsid = 1208
+                setIntProperty(WMQConstants.JMS_IBM_ENCODING, MQC.MQENC_NATIVE)
+                setIntProperty(WMQConstants.JMS_IBM_CHARACTER_SET, 1208)
+            },
+            fp.outputQueueName,
+            fp.mqUsername,
+            fp.mqPassword
+    )
 
-/*
+    bootstrap(kafkaProps, jmsProps)
+}
+
+fun bootstrap(kafkaProps: KafkaClientProperties, jmsProps: JMSProperties) {
+
+    // establish a pipeline of asynchronous coroutines communicating via channels
+    // (upstream) listen to kafka topic and send event to downstream
+    // (downstream) receive kafka events and write TextMessage to JMS backend
+
     val manager = ManagePipeline.init<String, GenericRecord>(
-            kCDetailsAvro,
-            ExternalAttachmentToJMS(
-                    jmsDetails,
-                    "src/test/resources/musicCatalog.xsl"))
-            .manageAsync()
-*/
-    // iff pipeline is up and running, establish REST server
+            kafkaProps,
+            ExternalAttachmentToJMS(jmsProps, kafkaProps.kafkaEvent))
 
+    // start the management process
+    val mngmtProcess = manager.manageAsync()
+
+    // give the creation of pipeline some slack
+    runBlocking { delay(1_000) }
+
+    // leave if there are problems
+    if (!manager.isOk) return
+
+    // establish asynchronous REST process
     val eREST = embeddedServer(Netty, 8080) {
         install(ShutDownUrl.ApplicationCallFeature) {
             shutDownUrl = "/redbutton/press"
@@ -79,17 +98,15 @@ fun bootstrap() {
         }
     }.start(wait = false)
 
+    // define a flag and subscribe to the REST shutdown option
     var eRIsActive = true
-
     eREST.environment.monitor.subscribe(ApplicationStopping) { eRIsActive = false }
 
     runBlocking {
 
-        println("Waiting for problem with kafka-topic-jms pipeline or NAIS REST server")
-/*        while (manager.isActive && eRIsActive) delay(100)
+        while (manager.isOk && eRIsActive) delay(1_000)
 
-        manager.cancelAndJoin()
-        kEnv.tearDown()*/
+        mngmtProcess.cancelAndJoin()
         eREST.application.dispose()
     }
 }

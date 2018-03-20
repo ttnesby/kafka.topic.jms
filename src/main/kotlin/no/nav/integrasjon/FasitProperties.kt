@@ -1,11 +1,18 @@
 package no.nav.integrasjon
 
-class FasitProperties {
-    val mqQueueManagerName = System.getenv("MQGATEWAY04_NAME")
-    val mqHostname = System.getenv("MQGATEWAY04_HOSTNAME")
-    val mqPort = System.getenv("MQGATEWAY04_PORT").toInt()
-    val mqChannel = System.getenv("MQGATEWAY04_CHANNEL")
-    val mqUsername = System.getenv("SRVAPPSERVER_USERNAME")
-    val mqPassword = System.getenv("SRVAPPSERVER_PASSWORD")
-    val outputQueueName = System.getenv("OUTPUT_QUEUE_NAME")
-}
+/**
+ * FasitProperties is a data class hosting relevant fasit properties required by this application
+ */
+data class FasitProperties(
+    val mqQueueManagerName: String = System.getenv("MQGATEWAY04_NAME")?.toString() ?: "",
+    val mqHostname: String = System.getenv("MQGATEWAY04_HOSTNAME")?.toString() ?: "",
+    val mqPort: Int = System.getenv("MQGATEWAY04_PORT")?.toInt() ?: 0,
+    val mqChannel: String = System.getenv("MQGATEWAY04_CHANNEL")?.toString() ?: "",
+    val mqUsername: String = System.getenv("SRVAPPSERVER_USERNAME")?.toString() ?: "",
+    val mqPassword: String = System.getenv("SRVAPPSERVER_PASSWORD")?.toString() ?: "",
+    val outputQueueName: String = System.getenv("OUTPUT_QUEUE_NAME")?.toString() ?: "",
+    val kafkaEvent: String = System.getenv("KAFKA_EVENT")?.toString() ?: "",
+
+    val isEmpty: Boolean = mqQueueManagerName.isEmpty() && mqHostname.isEmpty() && mqPort == 0 && mqChannel.isEmpty()
+            && outputQueueName.isEmpty() && kafkaEvent.isEmpty()
+)

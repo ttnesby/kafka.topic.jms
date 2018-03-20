@@ -5,8 +5,9 @@ import kotlinx.coroutines.experimental.runBlocking
 import kotlinx.coroutines.experimental.withTimeoutOrNull
 import mu.KotlinLogging
 import no.nav.integrasjon.jms.ExternalAttachmentToJMS
-import no.nav.integrasjon.jms.JMSDetails
+import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.jms.JMSTextMessageWriter
+import no.nav.integrasjon.kafka.KafkaEvents
 import no.nav.integrasjon.manager.Channels
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import no.nav.integrasjon.test.utils.getFileAsString
@@ -21,7 +22,6 @@ import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.context
 import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
-import org.jetbrains.spek.api.dsl.xit
 import java.io.File
 import javax.jms.TextMessage
 
@@ -29,9 +29,11 @@ object JMSTextMessageWriterSpec : Spek({
 
     val log = KotlinLogging.logger {  }
 
-    val jmsDetails = JMSDetails(
+    val jmsDetails = JMSProperties(
             ActiveMQConnectionFactory("vm://localhost?broker.persistent=false"),
-            "toDownstream"
+            "toDownstream",
+            "",
+            ""
     )
 
     class TrfString : JMSTextMessageWriter<String>(jmsDetails) {
@@ -214,7 +216,7 @@ object JMSTextMessageWriterSpec : Spek({
             it("should receive ${dataMusic.size} avro elements, transformed to html") {
 
                 val channels = Channels<GenericRecord>(1)
-                val jms = ExternalAttachmentToJMS(jmsDetails, "src/test/resources/musicCatalog.xsl" )
+                val jms = ExternalAttachmentToJMS(jmsDetails, KafkaEvents.TESTONLY )
                         .writeAsync(channels.toDownstream,channels.fromDownstream,channels.toManager)
 
                 runBlocking {
@@ -243,7 +245,7 @@ object JMSTextMessageWriterSpec : Spek({
                 val channels = Channels<GenericRecord>(1)
                 val jms = ExternalAttachmentToJMS(
                         jmsDetails,
-                        "src/main/resources/altinn2eifellesformat2018_03_16.xsl" )
+                        KafkaEvents.OPPFOLGINGSPLAN)
                         .writeAsync(channels.toDownstream,channels.fromDownstream,channels.toManager)
 
                 runBlocking {
@@ -270,7 +272,7 @@ object JMSTextMessageWriterSpec : Spek({
                 val channels = Channels<GenericRecord>(1)
                 val jms = ExternalAttachmentToJMS(
                         jmsDetails,
-                        "src/main/resources/altinn2eifellesformat2018_03_16.xsl" )
+                        KafkaEvents.MAALEKORT)
                         .writeAsync(channels.toDownstream,channels.fromDownstream,channels.toManager)
 
                 runBlocking {

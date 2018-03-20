@@ -1,14 +1,13 @@
 package no.nav.integrasjon.test
 
-import com.ibm.mq.jms.MQConnectionFactory
-import com.ibm.msg.client.wmq.WMQConstants
-import com.ibm.msg.client.wmq.compat.base.internal.MQC
 import kotlinx.coroutines.experimental.*
 import no.nav.common.KafkaEnvironment
 import no.nav.integrasjon.jms.ExternalAttachmentToJMS
-import no.nav.integrasjon.jms.JMSDetails
+import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.jms.JMSTextMessageWriter
-import no.nav.integrasjon.kafka.KafkaClientDetails
+import no.nav.integrasjon.kafka.KafkaClientProperties
+import no.nav.integrasjon.kafka.KafkaEvents
+import no.nav.integrasjon.kafka.KafkaTopicConsumer
 import no.nav.integrasjon.manager.ManagePipeline
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import no.nav.integrasjon.test.utils.KafkaTopicProducer
@@ -21,7 +20,6 @@ import org.apache.avro.Schema
 import org.apache.avro.generic.GenericData
 import org.apache.avro.generic.GenericRecord
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.producer.ProducerConfig
 import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.*
 import java.io.File
@@ -31,86 +29,35 @@ import javax.jms.TextMessage
 
 object ManagePipelineSpec : Spek({
 
-    val topicStr = "testString"
-    val topicInt = "testInt"
-    val topicAvro = "testAvro"
 
-    val kEnv = KafkaEnvironment(topics = listOf(topicStr,topicInt,topicAvro), withSchemaRegistry = true)
+    // create the topics to be created in kafka env
+    val topics = KafkaEvents.values().map { KafkaTopicConsumer.event2Topic(it) }
 
-    val kCDetailsStr = KafkaClientDetails(
-            Properties().apply {
-                set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
-            },
-            topicStr,
-            100
-    )
+    val kEnv = KafkaEnvironment(topics = topics, withSchemaRegistry = true)
 
-    val kCDetailsInt = KafkaClientDetails(
-            Properties().apply {
-                set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
-            },
-            topicInt,
-            100
-    )
+    val kCPPType = mutableMapOf<KafkaEvents, KafkaClientProperties>()
 
-    val kCDetailsAvro = KafkaClientDetails(
-            Properties().apply {
-                set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
-                set("schema.registry.url",kEnv.serverPark.schemaregistry.url)
-            },
-            topicAvro,
-            100
-    )
+    // create a map of all kafka client properties
+    KafkaEvents.values().forEach {
 
-    val kPDetailsStr = KafkaClientDetails(
-            Properties().apply {
-                set(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ProducerConfig.CLIENT_ID_CONFIG, "kafkaTopicProducer")
-            },
-            topicStr
-    )
+        kCPPType[it] = KafkaClientProperties(
+                Properties().apply {
+                    set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
+                    set("schema.registry.url",kEnv.serverPark.schemaregistry.url)
+                    set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicConsumer")
+                },
+                it,
+                100
+        )
+    }
 
-    val kPDetailsInt = KafkaClientDetails(
-            Properties().apply {
-                set(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ProducerConfig.CLIENT_ID_CONFIG, "kafkaTopicProducer")
-            },
-            topicInt
-    )
 
-    val kPDetailsAvro = KafkaClientDetails(
-            Properties().apply {
-                set(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kEnv.brokersURL)
-                set(ProducerConfig.CLIENT_ID_CONFIG, "kafkaTopicProducer")
-                set("schema.registry.url",kEnv.serverPark.schemaregistry.url)
-            },
-            topicAvro
-    )
-
-    val jmsDetails = JMSDetails(
+    val jmsDetails = JMSProperties(
             ActiveMQConnectionFactory("vm://localhost?broker.persistent=false"),
-            "toDownstream"
+            "toDownstream",
+            "",
+            ""
     )
-
-    val jmsDetailsIBM = JMSDetails(
-            MQConnectionFactory().apply {
-                hostName = "localhost"
-                port = 1414
-                queueManager = "QM1"
-                channel = "DEV.APP.SVRCONN"
-                transportType = WMQConstants.WMQ_CM_CLIENT
-                clientReconnectOptions = WMQConstants.WMQ_CLIENT_RECONNECT // will try to reconnect
-                clientReconnectTimeout = 45 // reconnection attempts for 45 seconds
-                ccsid = 1208
-                setIntProperty(WMQConstants.JMS_IBM_ENCODING, MQC.MQENC_NATIVE)
-                setIntProperty(WMQConstants.JMS_IBM_CHARACTER_SET, 1208)
-            },
-    "DEV.QUEUE.1"
-    )
-
 
     class TrfString : JMSTextMessageWriter<String>(jmsDetails) {
         override fun transform(event: String): Result =
@@ -136,78 +83,91 @@ object ManagePipelineSpec : Spek({
                 )
     }
 
-    val dataStr = (1..100).map {"data-$it"}
-    val dataInt = (1..100).map { it }
+    val kPData = mutableMapOf<KafkaEvents, List<Any>>()
+
+    kPData[KafkaEvents.STRING] = (1..100).map {"data-$it"}
+    kPData[KafkaEvents.INT] = (1..100).map { it }
 
     val schema = Schema.Parser().parse(File("src/main/resources/external_attachment.avsc"))
 
-    val dataAvro = (1..100).map {
+    kPData[KafkaEvents.AVRO] = (1..100).map {
         GenericData.Record(schema).apply {
-            put("batch","batch-$it")
-            put("sc","sc-$it")
-            put("sec","sec-$it")
-            put("archRef","archRef-$it")
+            put("batch", "batch-$it")
+            put("sc", "sc-$it")
+            put("sec", "sec-$it")
+            put("archRef", "archRef-$it")
         }
     }
-    val dataMusic = (1..100).map {
+
+    kPData[KafkaEvents.MUSIC] = (1..100).map {
         GenericData.Record(schema).apply {
             put("batch", getFileAsString("src/test/resources/musicCatalog.xml"))
-            put("sc","TESTONLY")
-            put("sec","sec-$it")
-            put("archRef","archRef-$it")
+            put("sc", "TESTONLY")
+            put("sec", "sec-$it")
+            put("archRef", "archRef-$it")
         }
     }
 
-    val dataEia = mutableListOf<GenericRecord>(
-            GenericData.Record(schema).apply {
-                put("batch", getFileAsString("src/test/resources/oppfolging_2913_02.xml"))
-                put("sc","2913")
-                put("sec","2")
-                put("archRef","test")
-            },
-            GenericData.Record(schema).apply {
-                put("batch", getFileAsString("src/test/resources/oppfolging_2913_03.xml"))
-                put("sc","2913")
-                put("sec","3")
-                put("archRef","test")
-            },
-            GenericData.Record(schema).apply {
-                put("batch", getFileAsString("src/test/resources/oppfolging_2913_04.xml"))
-                put("sc","2913")
-                put("sec","4")
-                put("archRef","test")
-            },
-            GenericData.Record(schema).apply {
-                put("batch", getFileAsString("src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml"))
-                put("sc","NavOppfPlan")
-                put("sec","rapportering_sykemeldte")
-                put("archRef","test")
-            },
-            GenericData.Record(schema).apply {
-                put("batch", getFileAsString("src/test/resources/bankkontonummer_2896_87.xml"))
-                put("sc","2896")
-                put("sec","87")
-                put("archRef","test")
-            }
-    )
+    val dataOppf = mutableListOf<GenericRecord>()
 
-    val dataOther = mutableListOf<GenericRecord>()
+     (1..25).forEach {
+         dataOppf.add(GenericData.Record(schema).apply {
+            put("batch", getFileAsString("src/test/resources/oppfolging_2913_02.xml"))
+            put("sc","2913")
+            put("sec","2")
+            put("archRef","test")
+         })
 
-    (1..50).forEach {
-        dataOther.add(GenericData.Record(schema).apply {
+         dataOppf.add(GenericData.Record(schema).apply {
+             put("batch", getFileAsString("src/test/resources/oppfolging_2913_03.xml"))
+             put("sc","2913")
+             put("sec","3")
+             put("archRef","test")
+         })
+
+         dataOppf.add(GenericData.Record(schema).apply {
+             put("batch", getFileAsString("src/test/resources/oppfolging_2913_04.xml"))
+             put("sc","2913")
+             put("sec","4")
+             put("archRef","test")
+         })
+
+         dataOppf.add(GenericData.Record(schema).apply {
+             put("batch", getFileAsString("src/test/resources/oppfolging_navoppfplan_rapportering_sykemeldte.xml"))
+             put("sc","NavOppfPlan")
+             put("sec","rapportering_sykemeldte")
+             put("archRef","test")
+         })
+    }
+
+    kPData[KafkaEvents.OPPFOLGINGSPLAN] = dataOppf
+
+    kPData[KafkaEvents.BANKKONTONR] = (1..100).map {
+        GenericData.Record(schema).apply {
+            put("batch", getFileAsString("src/test/resources/bankkontonummer_2896_87.xml"))
+            put("sc","2896")
+            put("sec","87")
+            put("archRef","test")
+        }
+    }
+
+    kPData[KafkaEvents.MAALEKORT] = (1..100).map {
+        GenericData.Record(schema).apply {
             put("batch", getFileAsString("src/test/resources/maalekort_4711_01.xml"))
             put("sc", "4711")
             put("sec", "1")
             put("archRef", "test")
-        })
-        dataOther.add(GenericData.Record(schema).apply {
+        }
+    }
+
+    kPData[KafkaEvents.BARNEHAGELISTE] = (1..100).map {
+        GenericData.Record(schema).apply {
             put("batch", getFileAsString("src/test/resources/barnehageliste_4795_01.xml"))
             put("sc", "4795")
             put("sec", "1")
             put("archRef", "test")
-        })
+        }
     }
-
 
     val waitPatience = 100L
     val patienceLimit = 7_000L
@@ -223,8 +183,10 @@ object ManagePipelineSpec : Spek({
 
             it("should receive ${dataStr.size} string elements, transformed to uppercase") {
 
-                val manager = ManagePipeline.init<String,String>(kCDetailsStr, TrfString()).manageAsync()
-                val producer = KafkaTopicProducer.init<String,String>(kPDetailsStr, "key").produceAsync(dataStr)
+                val manager = ManagePipeline.init<String,String>(
+                        kCPPType[KafkaEvents.STRING]!!, TrfString()).manageAsync()
+                val producer = KafkaTopicProducer.init<String,String>(
+                        kCPPType[KafkaEvents.STRING]!!, "key").produceAsync(dataStr)
 
                 // helper object to get jms queue size
 
@@ -250,8 +212,9 @@ object ManagePipelineSpec : Spek({
 
             it("should receive ${dataInt.size} integer elements, transformed to square") {
 
-                val manager = ManagePipeline.init<String,Int>(kCDetailsInt, TrfInt()).manageAsync()
-                val producer = KafkaTopicProducer.init<String,Int>(kPDetailsInt, "key").produceAsync(dataInt)
+                val manager = ManagePipeline.init<String,Int>(kCPPType[KafkaEvents.INT]!!, TrfInt()).manageAsync()
+                val producer = KafkaTopicProducer.init<String,Int>(
+                        kCPPType[KafkaEvents.INT]!!, "key").produceAsync(dataInt)
 
                 runBlocking {
 
@@ -274,9 +237,10 @@ object ManagePipelineSpec : Spek({
 
             it("should receive ${dataAvro.size} avro elements, transformed to toString") {
 
-                val manager = ManagePipeline.init<String,GenericRecord>(kCDetailsAvro, TrfAvro()).manageAsync()
+                val manager = ManagePipeline.init<String,GenericRecord>(
+                        kCPPType[KafkaEvents.AVRO]!!, TrfAvro()).manageAsync()
                 val producer = KafkaTopicProducer.init<String,GenericRecord>(
-                        kPDetailsAvro,
+                        kCPPType[KafkaEvents.AVRO]!!,
                         "key").produceAsync(dataAvro)
 
                 runBlocking {
@@ -296,19 +260,19 @@ object ManagePipelineSpec : Spek({
             }
         }
 
-        context("send avro ext. attachment elements, receive, transform, and send to jms") {
+        context("send music avro ext. attachment elements, receive, transform, and send to jms") {
 
             it("should receive ${dataMusic.size} elements, transformed to html") {
 
                 val manager = ManagePipeline.init<String,GenericRecord>(
-                        kCDetailsAvro,
+                        kCPPType[KafkaEvents.MUSIC]!!,
                         ExternalAttachmentToJMS(
                                 jmsDetails,
-                                "src/test/resources/musicCatalog.xsl"))
+                                KafkaEvents.MUSIC))
                         .manageAsync()
 
                 val producer = KafkaTopicProducer.init<String,GenericRecord>(
-                        kPDetailsAvro,
+                        kCPPType[KafkaEvents.MUSIC]!!,
                         "key").produceAsync(dataMusic)
 
                 runBlocking {
@@ -334,14 +298,14 @@ object ManagePipelineSpec : Spek({
             it("should receive ${dataEia.size} EIA elements, transformed to xml") {
 
                 val manager = ManagePipeline.init<String,GenericRecord>(
-                        kCDetailsAvro,
+                        kCPPType[KafkaEvents.OPPFOLGINGSPLAN]!!,
                         ExternalAttachmentToJMS(
                                 jmsDetails,
-                                "src/main/resources/altinn2eifellesformat2018_03_16.xsl"))
+                                KafkaEvents.OPPFOLGINGSPLAN))
                         .manageAsync()
 
                 val producer = KafkaTopicProducer.init<String,GenericRecord>(
-                        kPDetailsAvro,
+                        kCPPType[KafkaEvents.OPPFOLGINGSPLAN]!!,
                         "key").produceAsync(dataEia)
 
                 runBlocking {
@@ -363,14 +327,14 @@ object ManagePipelineSpec : Spek({
             it("should receive ${dataOther.size} other elements, transformed to xml") {
 
                 val manager = ManagePipeline.init<String,GenericRecord>(
-                        kCDetailsAvro,
+                        kCPPType[KafkaEvents.MAALEKORT]!!,
                         ExternalAttachmentToJMS(
                                 jmsDetails,
-                                "src/main/resources/altinn2eifellesformat2018_03_16.xsl"))
+                                KafkaEvents.MAALEKORT))
                         .manageAsync()
 
                 val producer = KafkaTopicProducer.init<String,GenericRecord>(
-                        kPDetailsAvro,
+                        kCPPType[KafkaEvents.MAALEKORT]!!,
                         "key").produceAsync(dataOther)
 
                 runBlocking {
