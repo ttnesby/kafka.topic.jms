@@ -2,6 +2,7 @@ package no.nav.integrasjon.test.utils
 
 import kotlinx.coroutines.experimental.CancellationException
 import kotlinx.coroutines.experimental.async
+import kotlinx.coroutines.experimental.delay
 import mu.KotlinLogging
 import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaTopicConsumer
@@ -26,6 +27,7 @@ class KafkaTopicProducer<K, in V>(private val clientProperties: KafkaClientPrope
             KafkaProducer<K, V>(clientProperties.baseProps).use { p ->
                 data.forEach { d ->
                     p.send(ProducerRecord<K, V>(topic, null, d)).get()
+                    delay(250)
                     log.debug { "Sent record to kafka topic $topic" }
                 }
             }

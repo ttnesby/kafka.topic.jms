@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.*
 import java.util.*
+import javax.jms.Session
 import javax.jms.TextMessage
 
 
@@ -57,7 +58,7 @@ object ManagePipelineSpec : Spek({
     )
 
     class TrfString : JMSTextMessageWriter<String>(jmsDetails) {
-        override fun transform(event: String): Result =
+        override fun transform(session: Session, event: String): Result =
                 Result(
                         status = true,
                         txtMsg = session.createTextMessage().apply { this.text = event.toUpperCase() }
@@ -65,7 +66,7 @@ object ManagePipelineSpec : Spek({
     }
 
     class TrfInt : JMSTextMessageWriter<Int>(jmsDetails) {
-        override fun transform(event: Int): Result =
+        override fun transform(session: Session, event: Int): Result =
                 Result(
                         status = true,
                         txtMsg = session.createTextMessage().apply { this.text = (event * event).toString() }
@@ -73,7 +74,7 @@ object ManagePipelineSpec : Spek({
     }
 
     class TrfAvro : JMSTextMessageWriter<GenericRecord>(jmsDetails) {
-        override fun transform(event: GenericRecord): Result =
+        override fun transform(session: Session, event: GenericRecord): Result =
                 Result(
                         status = true,
                         txtMsg = session.createTextMessage().apply { this.text = event.toString() }

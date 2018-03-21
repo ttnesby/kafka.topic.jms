@@ -17,21 +17,25 @@ import kotlin.reflect.full.starProjectedType
 
 class KafkaTopicConsumer<K, out V>(private val clientProperties: KafkaClientProperties) {
 
-    fun consumeAsync(
+    fun  consumeAsync(
             toDownstream: SendChannel<V>,
             fromDownStream: ReceiveChannel<Status>,
             toManager: SendChannel<Status>) = async {
         try {
+            // setting everything ok now, the kafka client will "wait" for kafka env to start up
+            var allGood = true
+            toManager.send(Ready)
+
             KafkaConsumer<K, V>(clientProperties.baseProps)
                     .apply {
-                        // be a loner - independent of group logic by reading from all partitions for topic
-                        assign(partitionsFor(event2Topic(clientProperties.kafkaEvent))
-                                .map { TopicPartition(it.topic(),it.partition()) })
+                        try {
+                            // be a loner - independent of group logic by reading from all partitions for topic
+                            assign(partitionsFor(event2Topic(clientProperties.kafkaEvent))
+                                    .map { TopicPartition(it.topic(), it.partition()) })
+                        }
+                        catch (e: Exception) {} // will be catched in use clause
                     }
                     .use { c ->
-
-                        var allGood = true
-                        toManager.send(Ready)
 
                         log.info("@start of consumeAsync")
 
@@ -83,8 +87,8 @@ class KafkaTopicConsumer<K, out V>(private val clientProperties: KafkaClientProp
 
         // notify manager if this job is still active
         if (isActive && !toManager.isClosedForSend) {
+            log.error("Report problem to manager")
             toManager.send(Problem)
-            log.error("Reported problem to manager")
         }
         log.info("@end of consumeAsync - goodbye!")
     }

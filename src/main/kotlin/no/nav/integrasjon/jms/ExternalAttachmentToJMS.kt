@@ -4,6 +4,7 @@ import no.nav.integrasjon.kafka.KafkaEvents
 import org.apache.avro.generic.GenericRecord
 import java.io.StringReader
 import java.io.StringWriter
+import javax.jms.Session
 
 class ExternalAttachmentToJMS(
         jmsProperties: JMSProperties,
@@ -21,7 +22,7 @@ class ExternalAttachmentToJMS(
     private val xFactory = net.sf.saxon.TransformerFactoryImpl()
     private val xslt = xFactory.newTransformer(javax.xml.transform.stream.StreamSource(xsltFilePath))
 
-    override fun transform(event: GenericRecord): Result {
+    override fun transform(session: Session, event: GenericRecord): Result {
 
         val xml = event["batch"].toString()
         val xe = XMLExtractor(xml)
@@ -29,7 +30,7 @@ class ExternalAttachmentToJMS(
         return when(event["sc"].toString()) {
 
             // TESTONLY - see test cases
-            "TESTONLY" -> xslTransform(xml)
+            "TESTONLY" -> xslTransform(session, xml)
 
             // bankkontonummer - no file attachment even though it's available...
             "2896" -> {
@@ -43,7 +44,7 @@ class ExternalAttachmentToJMS(
                     setParameter("OrgNo", xe.orgNo)
                     setParameter("Guuid", java.util.UUID.randomUUID().toString())
                 }
-                xslTransform(xml)
+                xslTransform(session, xml)
             }
 
             // Oppfolgingsplan service edition code 2,3,4 - no attachment available
@@ -58,7 +59,7 @@ class ExternalAttachmentToJMS(
                     setParameter("OrgNo", xe.orgNo)
                     setParameter("Guuid", java.util.UUID.randomUUID().toString())
                 }
-                xslTransform(xml)
+                xslTransform(session, xml)
             }
 
             // Oppfolgingsplan service edition code rapportering-sykmeldte - with attachment
@@ -73,7 +74,7 @@ class ExternalAttachmentToJMS(
                     setParameter("OrgNo", xe.orgNo)
                     setParameter("Guuid", java.util.UUID.randomUUID().toString())
                 }
-                xslTransform(xml)
+                xslTransform(session, xml)
             }
 
             // Maalekort
@@ -96,7 +97,7 @@ class ExternalAttachmentToJMS(
         }
     }
 
-    private fun xslTransform(xml: String): Result {
+    private fun xslTransform(session: Session, xml: String): Result {
 
         val resultWriter = StringWriter()
 

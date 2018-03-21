@@ -23,6 +23,7 @@ import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
 import javax.jms.TextMessage
 import no.nav.integrasjon.test.utils.D.kPData
+import javax.jms.Session
 
 object JMSTextMessageWriterSpec : Spek({
 
@@ -36,7 +37,7 @@ object JMSTextMessageWriterSpec : Spek({
     )
 
     class TrfString : JMSTextMessageWriter<String>(jmsDetails) {
-        override fun transform(event: String): Result =
+        override fun transform(session: Session, event: String): Result =
                 Result(
                         status = true,
                         txtMsg = session.createTextMessage().apply { this.text = event.toUpperCase() }
@@ -44,7 +45,7 @@ object JMSTextMessageWriterSpec : Spek({
     }
 
     class TrfInt : JMSTextMessageWriter<Int>(jmsDetails) {
-        override fun transform(event: Int): Result =
+        override fun transform(session: Session, event: Int): Result =
                 Result(
                         status = true,
                         txtMsg = session.createTextMessage().apply { this.text = (event * event).toString() }
@@ -52,7 +53,7 @@ object JMSTextMessageWriterSpec : Spek({
     }
 
     class TrfAvro : JMSTextMessageWriter<GenericRecord>(jmsDetails) {
-        override fun transform(event: GenericRecord): Result =
+        override fun transform(session: Session, event: GenericRecord): Result =
                 Result(
                         status = true,
                         txtMsg = session.createTextMessage().apply { this.text = event.toString() }

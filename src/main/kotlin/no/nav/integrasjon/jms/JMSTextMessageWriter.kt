@@ -13,14 +13,6 @@ import kotlin.IllegalStateException
 
 abstract class JMSTextMessageWriter<in V>(private val jmsProperties: JMSProperties) {
 
-    private val connection = jmsProperties.connFactory.createConnection(jmsProperties.username, jmsProperties.password)
-            .apply { this.start() }
-
-    protected val session = connection?.createSession(false, Session.AUTO_ACKNOWLEDGE) ?:
-            throw IllegalStateException("Cannot create session in JMSTextMessageWriter!")
-
-    private val producer = session.createProducer(session.createQueue(jmsProperties.queueName))
-
     data class Result(val status: Boolean = false, val txtMsg: TextMessage)
 
     fun writeAsync(
@@ -29,10 +21,20 @@ abstract class JMSTextMessageWriter<in V>(private val jmsProperties: JMSProperti
             toManager: SendChannel<Status>) = async {
 
         try {
-            connection.use { _ ->
+            // doing this now, in case of issues, catch by error handling
+            var allGood = true
+            toManager.send(Ready)
 
-                var allGood = true
-                toManager.send(Ready)
+
+            val connection = jmsProperties.connFactory.createConnection(jmsProperties.username, jmsProperties.password)
+                    .apply { this.start() }
+
+            val session = connection?.createSession(false, Session.AUTO_ACKNOWLEDGE)
+                    ?: throw IllegalStateException("Cannot create session!")
+
+            val producer = session.createProducer(session.createQueue(jmsProperties.queueName))
+
+            connection.use { _ ->
 
                 log.info("@start of writeAsync")
 
@@ -44,7 +46,7 @@ abstract class JMSTextMessageWriter<in V>(private val jmsProperties: JMSProperti
                             log.info { "Received event from upstream" }
 
                             log.info { "Invoke transformation" }
-                            val result = transform(e)
+                            val result = transform(session, e)
 
                             when(result.status) {
                                 true -> {
@@ -95,7 +97,7 @@ abstract class JMSTextMessageWriter<in V>(private val jmsProperties: JMSProperti
         log.info("@end of writeAsync - goodbye!")
     }
 
-    abstract fun transform(event: V): Result
+    abstract fun transform(session: Session, event: V): Result
 
     companion object {
 

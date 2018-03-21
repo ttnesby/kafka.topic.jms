@@ -14,6 +14,7 @@ import io.ktor.server.netty.Netty
 import kotlinx.coroutines.experimental.cancelAndJoin
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
+import mu.KotlinLogging
 import no.nav.integrasjon.jms.ExternalAttachmentToJMS
 import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.kafka.KafkaClientProperties
@@ -50,7 +51,7 @@ fun main(args: Array<String>) {
                 channel = fp.mqChannel
                 transportType = WMQConstants.WMQ_CM_CLIENT
                 clientReconnectOptions = WMQConstants.WMQ_CLIENT_RECONNECT // will try to reconnect
-                clientReconnectTimeout = 300 // reconnection attempts for 5 minutes
+                clientReconnectTimeout = 600 // reconnection attempts for 10 minutes
                 ccsid = 1208
                 setIntProperty(WMQConstants.JMS_IBM_ENCODING, MQC.MQENC_NATIVE)
                 setIntProperty(WMQConstants.JMS_IBM_CHARACTER_SET, 1208)
@@ -65,6 +66,11 @@ fun main(args: Array<String>) {
 
 fun bootstrap(kafkaProps: KafkaClientProperties, jmsProps: JMSProperties) {
 
+    val log = KotlinLogging.logger {  }
+
+    log.info { "@start of bootstrap" }
+    log.info { "Starting pipeline" }
+
     // establish a pipeline of asynchronous coroutines communicating via channels
     // (upstream) listen to kafka topic and send event to downstream
     // (downstream) receive kafka events and write TextMessage to JMS backend
@@ -76,37 +82,56 @@ fun bootstrap(kafkaProps: KafkaClientProperties, jmsProps: JMSProperties) {
     // start the management process
     val mngmtProcess = manager.manageAsync()
 
-    // give the creation of pipeline some slack
-    runBlocking { delay(1_000) }
+    try {
+        //TODO should be replaced with channel...
+        // give the creation of pipeline some slack
+        runBlocking { delay(367) }
 
-    // leave if there are problems
-    if (!manager.isOk) return
-
-    // establish asynchronous REST process
-    val eREST = embeddedServer(Netty, 8080) {
-        install(ShutDownUrl.ApplicationCallFeature) {
-            shutDownUrl = "/redbutton/press"
-            exitCodeSupplier = { 0 }
+        // leave if there are problems
+        if (!manager.isOk) {
+            log.info { "Manager not ok - shutting down" }
+            runBlocking { mngmtProcess.cancelAndJoin() }
+            return
         }
-        routing {
-            get("/isAlive") {
-                call.respondText("kafkatopic2jms is alive", ContentType.Text.Plain)
+
+        log.info { "Starting embedded REST server" }
+
+        //TODO Runtime.getRuntime().addShutdownHook()
+
+        // establish asynchronous REST process
+        val eREST = embeddedServer(Netty, 8080) {
+            install(ShutDownUrl.ApplicationCallFeature) {
+                shutDownUrl = "/redbutton/press"
+                exitCodeSupplier = { 0 }
             }
-            get("/isReady") {
-                call.respondText("kafkatopic2jms is ready", ContentType.Text.Plain)
+            routing {
+                get("/isAlive") {
+                    call.respondText("kafkatopic2jms is alive", ContentType.Text.Plain)
+                }
+                get("/isReady") {
+                    call.respondText("kafkatopic2jms is ready", ContentType.Text.Plain)
+                }
             }
+        }.start(wait = false)
+
+        // subscribe to the REST shutdown option
+        eREST.environment.monitor.subscribe(ApplicationStopping) {
+
+            // shutdown the pipeline
+            log.info { "Shutting down" }
+            runBlocking { mngmtProcess.cancelAndJoin() }
+            log.info { "@end of bootstrap" }
+
         }
-    }.start(wait = false)
 
-    // define a flag and subscribe to the REST shutdown option
-    var eRIsActive = true
-    eREST.environment.monitor.subscribe(ApplicationStopping) { eRIsActive = false }
+        log.info { "@waiting boostrap  - pipeline and embedded REST working" }
+        while (manager.isOk) runBlocking { delay(567) }
 
-    runBlocking {
-
-        while (manager.isOk && eRIsActive) delay(1_000)
-
-        mngmtProcess.cancelAndJoin()
-        eREST.application.dispose()
+    }
+    catch (e: Exception) {
+        log.error("Exception", e)
+    }
+    finally {
+        log.info { "@end of bootstrap" }
     }
 }

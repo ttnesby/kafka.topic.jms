@@ -45,17 +45,28 @@ class ManagePipeline<K,V>(
         try {
             while (isActive && (c.toManager.receive().let { latestStatus = it;it} != Problem)) {}
         }
-        finally {
-            if (latestStatus == Problem) {
-                allGood = false
-                log.error("Pipeline reported problem - shutting down")
-            }
-            withContext(NonCancellable) {
-                r.reversed().forEach { it.cancelAndJoin() }
-                c.close()
+        catch (e: Exception) {
+            when (e) {
+                is CancellationException -> {/* it's ok to be cancelled by execution environment*/ }
+                else -> log.error("Exception", e)
             }
         }
-        log.info("@end of manageAsync - goodbye!")
+        finally {
+            withContext(NonCancellable) {
+                if (latestStatus == Problem) {
+                    allGood = false
+                    log.error("Pipeline reported problem - shutting down")
+                }
+                else {
+                    log.info("Execution environment shutdown request - shutting down")
+                }
+
+                r.reversed().forEach { it.cancelAndJoin() }
+                c.close()
+
+                log.info("@end of manageAsync - goodbye!")
+            }
+        }
     }
 
     companion object {
