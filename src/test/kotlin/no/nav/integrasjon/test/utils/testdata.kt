@@ -34,7 +34,7 @@ object D {
 
         val dataOppf = mutableListOf<GenericRecord>()
 
-        (1..500).forEach {
+        (1..25).forEach {
             dataOppf.add(GenericData.Record(schema).apply {
                 put("batch", getFileAsString("src/test/resources/oppfolging_2913_02.xml"))
                 put("sc", "2913")

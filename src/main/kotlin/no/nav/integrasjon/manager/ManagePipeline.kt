@@ -24,19 +24,21 @@ class ManagePipeline<K,V>(
         log.info("starting JMS writeAsync")
         r.add(jmsTextMessageWriter.writeAsync(c.toDownstream, c.fromDownstream, c.toManager))
 
+/*
         if (c.toManager.receive() == Problem) {
             c.close()
             return@async
         }
+*/
 
         log.info("starting Kafka consumeAsync")
         r.add(kafkaTopicConsumer.consumeAsync(c.toDownstream, c.fromDownstream,c.toManager))
 
-        if (c.toManager.receive() == Problem) {
+/*        if (c.toManager.receive() == Problem) {
             r.filter { it.isActive }.forEach { it.cancelAndJoin() }
             c.close()
             return@async
-        }
+        }*/
 
         log.info("@start of manageAsync - monitoring pipeline")
 

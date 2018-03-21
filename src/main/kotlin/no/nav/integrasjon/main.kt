@@ -85,14 +85,14 @@ fun bootstrap(kafkaProps: KafkaClientProperties, jmsProps: JMSProperties) {
     try {
         //TODO should be replaced with channel...
         // give the creation of pipeline some slack
-        runBlocking { delay(367) }
+        //runBlocking { delay(367) }
 
         // leave if there are problems
-        if (!manager.isOk) {
+/*        if (!manager.isOk) {
             log.info { "Manager not ok - shutting down" }
             runBlocking { mngmtProcess.cancelAndJoin() }
             return
-        }
+        }*/
 
         log.info { "Starting embedded REST server" }
 

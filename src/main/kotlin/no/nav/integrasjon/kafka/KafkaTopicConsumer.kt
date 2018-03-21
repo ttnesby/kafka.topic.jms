@@ -24,16 +24,13 @@ class KafkaTopicConsumer<K, out V>(private val clientProperties: KafkaClientProp
         try {
             // setting everything ok now, the kafka client will "wait" for kafka env to start up
             var allGood = true
-            toManager.send(Ready)
+            //toManager.send(Ready)
 
             KafkaConsumer<K, V>(clientProperties.baseProps)
                     .apply {
-                        try {
-                            // be a loner - independent of group logic by reading from all partitions for topic
-                            assign(partitionsFor(event2Topic(clientProperties.kafkaEvent))
-                                    .map { TopicPartition(it.topic(), it.partition()) })
-                        }
-                        catch (e: Exception) {} // will be catched in use clause
+                        // be a loner - independent of group logic by reading from all partitions for topic
+                        assign(partitionsFor(event2Topic(clientProperties.kafkaEvent))
+                                .map { TopicPartition(it.topic(), it.partition()) })
                     }
                     .use { c ->
 

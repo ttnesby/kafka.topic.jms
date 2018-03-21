@@ -27,7 +27,7 @@ class KafkaTopicProducer<K, in V>(private val clientProperties: KafkaClientPrope
             KafkaProducer<K, V>(clientProperties.baseProps).use { p ->
                 data.forEach { d ->
                     p.send(ProducerRecord<K, V>(topic, null, d)).get()
-                    delay(250)
+                    //delay(250)
                     log.debug { "Sent record to kafka topic $topic" }
                 }
             }
@@ -59,6 +59,7 @@ class KafkaTopicProducer<K, in V>(private val clientProperties: KafkaClientPrope
             set(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, getKafkaSerializer(V::class.starProjectedType))
             set(ProducerConfig.ACKS_CONFIG, "all")
             set(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1)
+            set(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 120_000)
         }
     }
 }
