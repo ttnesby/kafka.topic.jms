@@ -1,7 +1,7 @@
 package no.nav.integrasjon.jms
 
-import kotlinx.coroutines.experimental.CancellationException
-import kotlinx.coroutines.experimental.async
+import kotlinx.coroutines.experimental.*
+import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.SendChannel
 import mu.KotlinLogging
@@ -11,21 +11,36 @@ import no.nav.integrasjon.manager.Status
 import javax.jms.*
 import kotlin.IllegalStateException
 
-abstract class JMSTextMessageWriter<in V>(private val jmsProperties: JMSProperties) {
+abstract class JMSTextMessageWriter<V>(
+        private val jmsProperties: JMSProperties,
+        status: SendChannel<Status>
+        ) : AutoCloseable {
 
-    data class Result(val status: Boolean = false, val txtMsg: TextMessage)
+    protected data class Result(val status: Boolean = false, val txtMsg: TextMessage)
 
-    fun writeAsync(
-            fromUpstream: ReceiveChannel<V>,
-            toUpstream: SendChannel<Status>,
-            toManager: SendChannel<Status>) = async {
+    val data = Channel<V>()
+    private val asyncProcess: Job
+
+    init {
+        log.info { "Starting" }
+        asyncProcess = writeAsync(data, status)
+    }
+
+    val isActive
+        get() = asyncProcess.isActive
+
+    override fun close() = runBlocking {
+        log.info { "Closing" }
+        asyncProcess.cancelAndJoin()
+        data.close()
+        log.info { "Closed" }
+    }
+
+    private fun writeAsync(
+            data: ReceiveChannel<V>,
+            status: SendChannel<Status>) = async {
 
         try {
-            // doing this now, in case of issues, catch by error handling
-            var allGood = true
-            toManager.send(Ready)
-
-
             val connection = jmsProperties.connFactory.createConnection(jmsProperties.username, jmsProperties.password)
                     .apply { this.start() }
 
@@ -36,12 +51,15 @@ abstract class JMSTextMessageWriter<in V>(private val jmsProperties: JMSProperti
 
             connection.use { _ ->
 
+                var allGood = true
+                status.send(Ready)
+
                 log.info("@start of writeAsync")
 
-                // receive fromUpstream, send to jms, and tell pipeline to commit
+                // receive data, send to jms, and tell pipeline to commit
                 while (isActive && allGood) {
 
-                    fromUpstream.receive().also { e ->
+                    data.receive().also { e ->
                         try {
                             log.info { "Received event from upstream" }
 
@@ -58,14 +76,14 @@ abstract class JMSTextMessageWriter<in V>(private val jmsProperties: JMSProperti
                                     log.info { "Send to JMS completed" }
 
                                     log.info {"Send Ready to upstream"}
-                                    toUpstream.send(Ready)
+                                    status.send(Ready)
 
                                 }
                                 else -> {
-                                    log.error {"Transformation failure, indicate problem to upstream and " +
-                                            "prepare for shutdown" }
+                                    log.error("Transformation failure, indicate problem to upstream and " +
+                                            "prepare for shutdown")
                                     allGood = false
-                                    toUpstream.send(Problem)
+                                    status.send(Problem)
                                 }
                             }
                         }
@@ -75,32 +93,32 @@ abstract class JMSTextMessageWriter<in V>(private val jmsProperties: JMSProperti
                             log.error("Exception", e)
                             log.error("Send Problem to upstream and prepare for shutdown")
                             allGood = false
-                            toUpstream.send(Problem)
+                            status.send(Problem)
                         }
                     }
                 }
             }
         }
+        // JMSSecurityException, JMSException, ClosedReceiveChannelException
         catch (e: Exception) {
             when(e) {
                 is CancellationException -> {/* it's ok to be cancelled by manager*/}
                 else -> log.error("Exception", e)
             }
-        } // JMSSecurityException, JMSException, ClosedReceiveChannelException
-
-        // notify manager if this job is still active
-        if (isActive && !toManager.isClosedForSend) {
-            toManager.send(Problem)
-            log.error("Reported problem to manager")
         }
-
+        finally {
+            // notify manager if this job is still active
+            if (isActive && !status.isClosedForSend) {
+                log.error("Report problem to manager")
+                status.send(Problem)
+            }
+        }
         log.info("@end of writeAsync - goodbye!")
     }
 
-    abstract fun transform(session: Session, event: V): Result
+    protected abstract fun transform(session: Session, event: V): Result
 
     companion object {
-
-        val log = KotlinLogging.logger {  }
+        internal val log = KotlinLogging.logger {  }
     }
 }

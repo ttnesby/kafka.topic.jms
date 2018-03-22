@@ -80,10 +80,11 @@ object BootstrapSpec : Spek({
     xdescribe("Test of boostrap") {
         xit("Just starting boostrap") {
 
+            bootstrap(kafkaProps, jmsProps)
+
             runBlocking {
 
-                bootstrap(kafkaProps, jmsProps)
-              //  producer.cancelAndJoin()
+                //producer.cancelAndJoin()
             }
 
             true shouldEqualTo true

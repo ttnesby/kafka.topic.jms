@@ -2,17 +2,10 @@
 
 package no.nav.integrasjon.test
 
-import kotlinx.coroutines.experimental.cancelAndJoin
-import kotlinx.coroutines.experimental.delay
-import kotlinx.coroutines.experimental.runBlocking
-import kotlinx.coroutines.experimental.withTimeoutOrNull
 import no.nav.common.KafkaEnvironment
 import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaEvents
 import no.nav.integrasjon.kafka.KafkaTopicConsumer
-import no.nav.integrasjon.manager.Channels
-import no.nav.integrasjon.manager.Problem
-import no.nav.integrasjon.manager.Ready
 import org.amshove.kluent.shouldContainAll
 import org.amshove.kluent.shouldEqualTo
 import org.apache.avro.generic.GenericRecord
@@ -51,8 +44,6 @@ object KafkaTopicConsumerSpec : Spek({
                 )
     }
 
-    val waitPatience = 100L
-
     describe("KafkaTopicConsumer tests") {
 
         beforeGroup {
@@ -74,32 +65,10 @@ object KafkaTopicConsumerSpec : Spek({
 
             it("should not receive any data when all data is already committed") {
 
-                val events = mutableListOf<String>()
-
-                Channels<String>(1).use { c ->
-
-                    runBlocking {
-
-                        // kick of asynchronous task for receiving data from kafka
-                        val consumer = KafkaTopicConsumer.init<String, String>(kCPPType[KafkaEvents.STRING]!!)
-                                .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
-
-                        if (c.toManager.receive() == Problem) return@runBlocking
-
-                        withTimeoutOrNull(2_000L) {
-                            while (events.isEmpty() && (c.toManager.poll()?.let { it } != Problem)) {
-                                c.toDownstream.poll()?.let {
-                                    events.add(it)
-                                    c.fromDownstream.send(Ready)
-                                }
-                                delay(waitPatience)
-                            }
-                        }
-
-                        consumer.cancelAndJoin()
-                    }
-                }
-                events.isEmpty() shouldEqualTo true
+               produceAndConsumeKTC(
+                       kCPPType[KafkaEvents.STRING]!!,
+                       "key",
+                       emptyList<String>()).isEmpty() shouldEqualTo true
             }
         }
 
@@ -118,31 +87,10 @@ object KafkaTopicConsumerSpec : Spek({
 
             it("should not receive any data when all data is already committed") {
 
-                val events = mutableListOf<Int>()
-
-                Channels<Int>(1).use { c ->
-
-                    runBlocking {
-
-                        // kick of asynchronous task for receiving data from kafka
-                        val consumer = KafkaTopicConsumer.init<String, Int>(kCPPType[KafkaEvents.INT]!!)
-                                .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
-
-                        if (c.toManager.receive() == Problem) return@runBlocking
-
-                        withTimeoutOrNull(2_000L) {
-                            while (events.isEmpty()) {
-                                c.toDownstream.poll()?.let {
-                                    events.add(it)
-                                    c.fromDownstream.send(Ready)
-                                }
-                                delay(waitPatience)
-                            }
-                        }
-                        consumer.cancelAndJoin()
-                    }
-                }
-                events.isEmpty() shouldEqualTo true
+                produceAndConsumeKTC(
+                        kCPPType[KafkaEvents.INT]!!,
+                        "key",
+                        emptyList<Int>()).isEmpty() shouldEqualTo true
             }
         }
 

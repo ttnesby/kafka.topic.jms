@@ -8,10 +8,9 @@ import io.ktor.http.ContentType
 import io.ktor.response.respondText
 import io.ktor.routing.get
 import io.ktor.routing.routing
-import io.ktor.server.engine.ShutDownUrl
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
-import kotlinx.coroutines.experimental.cancelAndJoin
+import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
 import mu.KotlinLogging
@@ -19,7 +18,9 @@ import no.nav.integrasjon.jms.ExternalAttachmentToJMS
 import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaEvents
-import no.nav.integrasjon.manager.ManagePipeline
+import no.nav.integrasjon.kafka.KafkaTopicConsumer
+import no.nav.integrasjon.manager.Problem
+import no.nav.integrasjon.manager.Status
 import org.apache.avro.generic.GenericRecord
 import java.util.*
 
@@ -75,63 +76,42 @@ fun bootstrap(kafkaProps: KafkaClientProperties, jmsProps: JMSProperties) {
     // (upstream) listen to kafka topic and send event to downstream
     // (downstream) receive kafka events and write TextMessage to JMS backend
 
-    val manager = ManagePipeline.init<String, GenericRecord>(
-            kafkaProps,
-            ExternalAttachmentToJMS(jmsProps, kafkaProps.kafkaEvent))
-
-    // start the management process
-    val mngmtProcess = manager.manageAsync()
+    val status = Channel<Status>()
 
     try {
-        //TODO should be replaced with channel...
-        // give the creation of pipeline some slack
-        //runBlocking { delay(367) }
+        runBlocking {
 
-        // leave if there are problems
-/*        if (!manager.isOk) {
-            log.info { "Manager not ok - shutting down" }
-            runBlocking { mngmtProcess.cancelAndJoin() }
-            return
-        }*/
+            ExternalAttachmentToJMS(jmsProps, status, kafkaProps.kafkaEvent).use { jms ->
 
-        log.info { "Starting embedded REST server" }
+                if (status.receive() == Problem) return@use
 
-        //TODO Runtime.getRuntime().addShutdownHook()
+                KafkaTopicConsumer.init<String, GenericRecord>(kafkaProps, jms.data, status).use { consumer ->
 
-        // establish asynchronous REST process
-        val eREST = embeddedServer(Netty, 8080) {
-            install(ShutDownUrl.ApplicationCallFeature) {
-                shutDownUrl = "/redbutton/press"
-                exitCodeSupplier = { 0 }
-            }
-            routing {
-                get("/isAlive") {
-                    call.respondText("kafkatopic2jms is alive", ContentType.Text.Plain)
-                }
-                get("/isReady") {
-                    call.respondText("kafkatopic2jms is ready", ContentType.Text.Plain)
+                    log.info { "Starting embedded REST server" }
+
+                    // establish asynchronous REST process
+                    val eREST = embeddedServer(Netty, 8080) {
+                        routing {
+                            get("/isAlive") {
+                                call.respondText("kafkatopic2jms is alive", ContentType.Text.Plain)
+                            }
+                            get("/isReady") {
+                                call.respondText("kafkatopic2jms is ready", ContentType.Text.Plain)
+                            }
+                        }
+                    }.start(wait = false)
+
+                    while (jms.isActive && consumer.isActive) delay(67)
                 }
             }
-        }.start(wait = false)
-
-        // subscribe to the REST shutdown option
-        eREST.environment.monitor.subscribe(ApplicationStopping) {
-
-            // shutdown the pipeline
-            log.info { "Shutting down" }
-            runBlocking { mngmtProcess.cancelAndJoin() }
-            log.info { "@end of bootstrap" }
-
         }
-
-        log.info { "@waiting boostrap  - pipeline and embedded REST working" }
-        while (manager.isOk) runBlocking { delay(567) }
 
     }
     catch (e: Exception) {
         log.error("Exception", e)
     }
     finally {
+        status.close()
         log.info { "@end of bootstrap" }
     }
 }

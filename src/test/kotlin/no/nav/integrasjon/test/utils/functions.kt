@@ -1,6 +1,7 @@
 package no.nav.integrasjon.test.utils
 
 import kotlinx.coroutines.experimental.cancelAndJoin
+import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
 import kotlinx.coroutines.experimental.withTimeoutOrNull
@@ -9,10 +10,7 @@ import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaEvents
 import no.nav.integrasjon.kafka.KafkaTopicConsumer
-import no.nav.integrasjon.manager.Channels
-import no.nav.integrasjon.manager.ManagePipeline
-import no.nav.integrasjon.manager.Problem
-import no.nav.integrasjon.manager.Ready
+import no.nav.integrasjon.manager.*
 import org.apache.avro.generic.GenericRecord
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -54,32 +52,35 @@ inline fun <reified K,reified V>produceAndConsumeKTC(
 
     val events = mutableListOf<V>()
 
-    Channels<V>(1).use { c ->
+    val toDownstream = Channel<V>()
+    val status = Channel<Status>()
+
+    //kick of asynchronous task for sending data to kafka
+    val producer = KafkaTopicProducer.init<K, V>(
+            cliProps, key).produceAsync(data)
+
+    // kick of asynchronous task for receiving data from kafka
+    KafkaTopicConsumer.init<K, V>(
+            cliProps,
+            toDownstream,
+            status).use {
 
         runBlocking {
 
-            // kick of asynchronous task for receiving data from kafka
-            val consumer = KafkaTopicConsumer.init<K, V>(cliProps)
-                    .consumeAsync(c.toDownstream,c.fromDownstream,c.toManager)
-
-            if (c.toManager.receive() == Problem) return@runBlocking
-
-            //kick of asynchronous task for sending data to kafka
-            val producer = KafkaTopicProducer.init<K,V>(
-                    cliProps, key).produceAsync(data)
-
             withTimeoutOrNull(7_000L) {
-                while (events.size < data.size && (c.toManager.poll()?.let { it } != Problem))
-                    c.toDownstream.receive().also {
+                while (events.size < data.size && (status.poll()?.let { it } != Problem))
+                    toDownstream.receive().also {
                         events.add(it)
-                        c.fromDownstream.send(Ready)
+                        status.send(Ready)
                     }
             }
 
             producer.cancelAndJoin()
-            consumer.cancelAndJoin()
         }
     }
+
+    toDownstream.close()
+    status.close()
 
     return events.toList()
 }
@@ -90,24 +91,30 @@ fun produceToJMSMP(
         kafkaEvent: KafkaEvents,
         data: List<GenericRecord>): Int {
 
-    val manager = ManagePipeline.init<String, GenericRecord>(
-            cliProps,
-            ExternalAttachmentToJMS(jmsProps, kafkaEvent)
-    ).manageAsync()
-
     val producer = KafkaTopicProducer.init<String, GenericRecord>(cliProps, "key").produceAsync(data)
+    val status = Channel<Status>()
+    var result = 0
 
-    return runBlocking {
-        EmbeddedActiveMQ(jmsProps).use { eMQ ->
+    runBlocking {
+        ExternalAttachmentToJMS(jmsProps, status, kafkaEvent).use { jms ->
 
-            withTimeoutOrNull(7_000) {
-                while (eMQ.queue.size < data.size && manager.isActive) delay(100)
+            if (status.receive() == Problem) return@runBlocking
+
+            KafkaTopicConsumer.init<String, GenericRecord>(cliProps, jms.data, status).use {
+
+                EmbeddedActiveMQ(jmsProps).use { eMQ ->
+
+                    withTimeoutOrNull(7_000) {
+                        while (eMQ.queue.size < data.size) delay(100)
+                    }
+                    producer.cancelAndJoin()
+
+                    result = eMQ.queue.size
+                }
             }
-
-            producer.cancelAndJoin()
-            manager.cancelAndJoin()
-
-            eMQ.queue.size
         }
     }
+    status.close()
+
+    return result
 }

@@ -1,6 +1,8 @@
 package no.nav.integrasjon.jms
 
+import kotlinx.coroutines.experimental.channels.SendChannel
 import no.nav.integrasjon.kafka.KafkaEvents
+import no.nav.integrasjon.manager.Status
 import org.apache.avro.generic.GenericRecord
 import java.io.StringReader
 import java.io.StringWriter
@@ -8,7 +10,8 @@ import javax.jms.Session
 
 class ExternalAttachmentToJMS(
         jmsProperties: JMSProperties,
-        kafkaEvent: KafkaEvents) : JMSTextMessageWriter<GenericRecord>(jmsProperties) {
+        status: SendChannel<Status>,
+        kafkaEvent: KafkaEvents) : JMSTextMessageWriter<GenericRecord>(jmsProperties, status) {
 
     private val xsltFilePath = when (kafkaEvent) {
         KafkaEvents.OPPFOLGINGSPLAN -> "src/main/resources/altinn2eifellesformat2018_03_16.xsl"

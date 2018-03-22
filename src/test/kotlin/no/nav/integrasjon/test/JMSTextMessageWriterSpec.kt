@@ -2,33 +2,36 @@
 
 package no.nav.integrasjon.test
 
-import kotlinx.coroutines.experimental.cancelAndJoin
+import kotlinx.coroutines.experimental.channels.Channel
+import kotlinx.coroutines.experimental.channels.SendChannel
 import kotlinx.coroutines.experimental.runBlocking
 import kotlinx.coroutines.experimental.withTimeoutOrNull
 import no.nav.integrasjon.jms.ExternalAttachmentToJMS
 import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.jms.JMSTextMessageWriter
 import no.nav.integrasjon.kafka.KafkaEvents
-import no.nav.integrasjon.manager.Channels
+import no.nav.integrasjon.manager.Problem
+import no.nav.integrasjon.manager.Status
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
-import no.nav.integrasjon.test.utils.getFileAsString
-import no.nav.integrasjon.test.utils.xmlOneliner
 import org.amshove.kluent.shouldContainAll
-import org.amshove.kluent.shouldEqualTo
 import org.apache.activemq.ActiveMQConnectionFactory
-import org.apache.avro.generic.GenericRecord
 import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.context
 import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
 import javax.jms.TextMessage
 import no.nav.integrasjon.test.utils.D.kPData
+import no.nav.integrasjon.test.utils.getFileAsString
+import no.nav.integrasjon.test.utils.xmlOneliner
+import org.amshove.kluent.shouldEqualTo
+import org.apache.avro.generic.GenericRecord
 import javax.jms.Session
 
 object JMSTextMessageWriterSpec : Spek({
 
     //val log = KotlinLogging.logger {  }
 
+    // global use of one jms settings
     val jmsDetails = JMSProperties(
             ActiveMQConnectionFactory("vm://localhost?broker.persistent=false"),
             "toDownstream",
@@ -36,7 +39,7 @@ object JMSTextMessageWriterSpec : Spek({
             ""
     )
 
-    class TrfString : JMSTextMessageWriter<String>(jmsDetails) {
+    class TrfString(status: SendChannel<Status>) : JMSTextMessageWriter<String>(jmsDetails, status) {
         override fun transform(session: Session, event: String): Result =
                 Result(
                         status = true,
@@ -44,7 +47,7 @@ object JMSTextMessageWriterSpec : Spek({
                 )
     }
 
-    class TrfInt : JMSTextMessageWriter<Int>(jmsDetails) {
+    class TrfInt(status: SendChannel<Status>) : JMSTextMessageWriter<Int>(jmsDetails, status) {
         override fun transform(session: Session, event: Int): Result =
                 Result(
                         status = true,
@@ -52,7 +55,7 @@ object JMSTextMessageWriterSpec : Spek({
                 )
     }
 
-    class TrfAvro : JMSTextMessageWriter<GenericRecord>(jmsDetails) {
+    class TrfAvro(status: SendChannel<Status>) : JMSTextMessageWriter<GenericRecord>(jmsDetails, status) {
         override fun transform(session: Session, event: GenericRecord): Result =
                 Result(
                         status = true,
@@ -70,138 +73,140 @@ object JMSTextMessageWriterSpec : Spek({
 
             it("should receive ${kPData[KafkaEvents.STRING]!!.size} string elements, transformed to uppercase") {
 
-                val channels = Channels<String>(1)
-                val jms = TrfString().writeAsync(channels.toDownstream,channels.fromDownstream,channels.toManager)
                 val data = kPData[KafkaEvents.STRING]!! as List<String>
+                val result = mutableListOf<String>()
 
-                runBlocking {
+                val status = Channel<Status>()
+                TrfString(status).use { jms ->
 
-                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                    runBlocking {
+                        if (status.receive() == Problem) return@runBlocking
 
-                        withTimeoutOrNull(patienceLimit) {
-                            data.forEach {
-                                channels.toDownstream.send(it)
-                                channels.fromDownstream.receive() //receive ack so the jms will continue to receive
+                        EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                            withTimeoutOrNull(patienceLimit) {
+                                data.forEach {
+                                    jms.data.send(it)
+                                    status.receive() //receive Ready so the jms will continue to receive
+                                }
                             }
+                            eMQ.queue.forEach { result.add((it as TextMessage).text) }
                         }
-
-                        jms.cancelAndJoin()
-                        channels.close()
-
-                        eMQ.queue.map { (it as TextMessage).text }
                     }
-                } shouldContainAll data.map { it.toUpperCase() }
+                }
+                status.close()
+
+                result shouldContainAll data.map { it.toUpperCase() }
             }
 
             it("should receive ${kPData[KafkaEvents.INT]!!.size} int elements, transformed to square") {
 
-                val channels = Channels<Int>(1)
-                val jms = TrfInt().writeAsync(channels.toDownstream,channels.fromDownstream,channels.toManager)
                 val data = kPData[KafkaEvents.INT]!! as List<Int>
+                val result = mutableListOf<String>()
 
+                val status = Channel<Status>()
+                TrfInt(status).use { jms ->
 
-                runBlocking {
+                    runBlocking {
+                        if (status.receive() == Problem) return@runBlocking
 
-                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
-
-                        withTimeoutOrNull(patienceLimit) {
-                            data.forEach {
-                                channels.toDownstream.send(it)
-                                channels.fromDownstream.receive() //receive ack so the jms will continue to receive
+                        EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                            withTimeoutOrNull(patienceLimit) {
+                                data.forEach {
+                                    jms.data.send(it)
+                                    status.receive() //receive Ready so the jms will continue to receive
+                                }
                             }
+                            eMQ.queue.forEach { result.add((it as TextMessage).text) }
                         }
-
-                        jms.cancelAndJoin()
-                        channels.close()
-
-                        eMQ.queue.map { (it as TextMessage).text }
                     }
-                } shouldContainAll data.map { (it*it).toString() }
+                }
+                status.close()
+
+                result shouldContainAll data.map { (it*it).toString() }
             }
 
             it("should receive ${kPData[KafkaEvents.AVRO]!!.size} avro elements, transformed") {
 
-                val channels = Channels<GenericRecord>(1)
-                val jms = TrfAvro().writeAsync(channels.toDownstream,channels.fromDownstream,channels.toManager)
                 val data = kPData[KafkaEvents.AVRO]!! as List<GenericRecord>
+                val result = mutableListOf<String>()
 
+                val status = Channel<Status>()
+                TrfAvro(status).use { jms ->
 
-                runBlocking {
+                    runBlocking {
+                        if (status.receive() == Problem) return@runBlocking
 
-                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
-
-                        withTimeoutOrNull(patienceLimit) {
-                            data.forEach {
-                                channels.toDownstream.send(it)
-                                channels.fromDownstream.receive() //receive ack so the jms will continue to receive
+                        EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                            withTimeoutOrNull(patienceLimit) {
+                                data.forEach {
+                                    jms.data.send(it)
+                                    status.receive() //receive Ready so the jms will continue to receive
+                                }
                             }
+                            eMQ.queue.forEach { result.add((it as TextMessage).text) }
                         }
-
-                        jms.cancelAndJoin()
-                        channels.close()
-
-                        eMQ.queue.map { (it as TextMessage).text }
                     }
-                } shouldContainAll data.map { it.toString() }
+                }
+                status.close()
+
+                result shouldContainAll data.map { it.toString() }
             }
 
-            it("should receive ${kPData[KafkaEvents.MUSIC]!!.size} avro elements, transformed to html") {
-
-                val channels = Channels<GenericRecord>(1)
-                val jms = ExternalAttachmentToJMS(jmsDetails, KafkaEvents.MUSIC )
-                        .writeAsync(channels.toDownstream,channels.fromDownstream,channels.toManager)
+            it("should receive ${kPData[KafkaEvents.MUSIC]!!.size} music elements, transformed to html") {
 
                 val data = kPData[KafkaEvents.MUSIC]!! as List<GenericRecord>
+                val result = mutableListOf<Int>()
 
-                runBlocking {
+                val status = Channel<Status>()
+                ExternalAttachmentToJMS(jmsDetails, status, KafkaEvents.MUSIC ).use { jms ->
 
-                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                    runBlocking {
+                        if (status.receive() == Problem) return@runBlocking
 
-                        withTimeoutOrNull(patienceLimit) {
-                            data.forEach {
-                                channels.toDownstream.send(it)
-                                channels.fromDownstream.receive() //receive ack so the jms will continue to receive
+                        EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                            withTimeoutOrNull(patienceLimit) {
+                                data.forEach {
+                                    jms.data.send(it)
+                                    status.receive() //receive Ready so the jms will continue to receive
+                                }
                             }
+                            eMQ.queue.forEach { result.add(xmlOneliner((it as TextMessage).text).hashCode()) }
                         }
-
-                        jms.cancelAndJoin()
-                        channels.close()
-
-                        eMQ.queue.map { xmlOneliner((it as TextMessage).text).hashCode() }
                     }
-                } shouldContainAll data.map {
-                    xmlOneliner(getFileAsString("src/test/resources/musicCatalog.html")).hashCode()
                 }
+                status.close()
+
+                result shouldContainAll data.map {
+                    xmlOneliner(getFileAsString("src/test/resources/musicCatalog.html")).hashCode() }
             }
 
-            it("should receive ${kPData[KafkaEvents.OPPFOLGINGSPLAN]!!.size} avro elements, " +
+           it("should receive ${kPData[KafkaEvents.OPPFOLGINGSPLAN]!!.size} oppf elements, " +
                     "transformed to xml") {
 
-                val channels = Channels<GenericRecord>(1)
-                val jms = ExternalAttachmentToJMS(
-                        jmsDetails,
-                        KafkaEvents.OPPFOLGINGSPLAN)
-                        .writeAsync(channels.toDownstream,channels.fromDownstream,channels.toManager)
-
                 val data = kPData[KafkaEvents.OPPFOLGINGSPLAN]!! as List<GenericRecord>
+                var result = 0
 
-                runBlocking {
+                val status = Channel<Status>()
+                ExternalAttachmentToJMS(jmsDetails, status, KafkaEvents.OPPFOLGINGSPLAN ).use { jms ->
 
-                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                    runBlocking {
+                        if (status.receive() == Problem) return@runBlocking
 
-                        withTimeoutOrNull(patienceLimit) {
-                            data.forEach {
-                                channels.toDownstream.send(it)
-                                channels.fromDownstream.receive() //receive ack so the jms will continue to receive
+                        EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                            withTimeoutOrNull(patienceLimit) {
+                                data.forEach {
+                                    jms.data.send(it)
+                                    status.receive() //receive Ready so the jms will continue to receive
+                                }
                             }
+                            result = eMQ.queue.size
                         }
-
-                        jms.cancelAndJoin()
-                        channels.close()
-
-                        eMQ.queue.size
                     }
-                } shouldEqualTo data.size
+                }
+                status.close()
+
+                result shouldEqualTo data.size
+
             }
         }
     }

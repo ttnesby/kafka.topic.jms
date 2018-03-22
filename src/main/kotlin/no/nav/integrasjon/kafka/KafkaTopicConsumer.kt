@@ -1,7 +1,6 @@
 package no.nav.integrasjon.kafka
 
-import kotlinx.coroutines.experimental.CancellationException
-import kotlinx.coroutines.experimental.async
+import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.SendChannel
 import mu.KotlinLogging
@@ -15,17 +14,32 @@ import org.apache.kafka.common.TopicPartition
 import java.util.*
 import kotlin.reflect.full.starProjectedType
 
-class KafkaTopicConsumer<K, out V>(private val clientProperties: KafkaClientProperties) {
+class KafkaTopicConsumer<K, out V>(
+        private val clientProperties: KafkaClientProperties,
+        toDownstream: SendChannel<V>,
+        status: ReceiveChannel<Status>) : AutoCloseable {
 
-    fun  consumeAsync(
+    private val asyncProcess: Job
+
+    init {
+        log.info { "Starting" }
+        asyncProcess = consumeAsync(toDownstream, status)
+    }
+
+    override fun close() = runBlocking {
+        log.info { "Closing" }
+        asyncProcess.cancelAndJoin()
+        log.info { "Closed" }
+    }
+
+    val isActive
+        get() = asyncProcess.isActive
+
+
+    private fun consumeAsync(
             toDownstream: SendChannel<V>,
-            fromDownStream: ReceiveChannel<Status>,
-            toManager: SendChannel<Status>) = async {
+            status: ReceiveChannel<Status>) = async {
         try {
-            // setting everything ok now, the kafka client will "wait" for kafka env to start up
-            var allGood = true
-            toManager.send(Ready)
-
             KafkaConsumer<K, V>(clientProperties.baseProps)
                     .apply {
                         // be a loner - independent of group logic by reading from all partitions for topic
@@ -33,6 +47,8 @@ class KafkaTopicConsumer<K, out V>(private val clientProperties: KafkaClientProp
                                 .map { TopicPartition(it.topic(), it.partition()) })
                     }
                     .use { c ->
+
+                        var allGood = true
 
                         log.info("@start of consumeAsync")
 
@@ -47,9 +63,8 @@ class KafkaTopicConsumer<K, out V>(private val clientProperties: KafkaClientProp
                                 log.info { "Send event downstream and wait for response" }
                                 toDownstream.send(e.value())
 
-
                                 // wait for feedback from pipeline
-                                when (fromDownStream.receive()) {
+                                when (status.receive()) {
                                     Ready -> try {
                                         log.info { "Got Ready from downstream, trying commit" }
                                         c.commitSync()
@@ -72,34 +87,35 @@ class KafkaTopicConsumer<K, out V>(private val clientProperties: KafkaClientProp
                         }
                     }
         }
+        // IllegalArgumentException, IllegalStateException, InvalidOffsetException, WakeupException
+        // InterruptException, AuthenticationException, AuthorizationException, KafkaException
+        // IllegalArgumentException, IllegalStateException
         catch (e: Exception) {
             when (e) {
                 is CancellationException -> {/* it's ok to be cancelled by manager*/ }
                 else -> log.error("Exception", e)
             }
         }
-        // IllegalArgumentException, IllegalStateException, InvalidOffsetException, WakeupException
-        // InterruptException, AuthenticationException, AuthorizationException, KafkaException
-        // IllegalArgumentException, IllegalStateException
-
-        // notify manager if this job is still active
-        if (isActive && !toManager.isClosedForSend) {
-            log.error("Report problem to manager")
-            toManager.send(Problem)
+        finally {
+            log.info("@end of consumeAsync - goodbye!")
         }
-        log.info("@end of consumeAsync - goodbye!")
     }
 
     companion object {
 
         private val log = KotlinLogging.logger {  }
 
-        inline fun <reified K, reified V> init(clientProperties: KafkaClientProperties) = KafkaTopicConsumer<K, V>(
+        inline fun <reified K, reified V> init(
+                clientProperties: KafkaClientProperties,
+                toDownstream: SendChannel<V>,
+                status: ReceiveChannel<Status>) = KafkaTopicConsumer<K, V>(
                 KafkaClientProperties(
                         propertiesInjection<K, V>(clientProperties.baseProps),
                         clientProperties.kafkaEvent,
                         clientProperties.pollTimeout
-                ))
+                ),
+                toDownstream,
+                status)
 
         inline fun <reified K, reified V> propertiesInjection(baseProps: Properties) = baseProps.apply {
             set(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(K::class.starProjectedType))
