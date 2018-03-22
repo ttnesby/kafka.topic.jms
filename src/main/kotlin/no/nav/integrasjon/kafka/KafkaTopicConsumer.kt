@@ -24,7 +24,7 @@ class KafkaTopicConsumer<K, out V>(private val clientProperties: KafkaClientProp
         try {
             // setting everything ok now, the kafka client will "wait" for kafka env to start up
             var allGood = true
-            //toManager.send(Ready)
+            toManager.send(Ready)
 
             KafkaConsumer<K, V>(clientProperties.baseProps)
                     .apply {

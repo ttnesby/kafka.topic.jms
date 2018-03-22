@@ -23,7 +23,7 @@ abstract class JMSTextMessageWriter<in V>(private val jmsProperties: JMSProperti
         try {
             // doing this now, in case of issues, catch by error handling
             var allGood = true
-            //toManager.send(Ready)
+            toManager.send(Ready)
 
 
             val connection = jmsProperties.connFactory.createConnection(jmsProperties.username, jmsProperties.password)

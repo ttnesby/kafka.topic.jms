@@ -20,6 +20,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
+import org.jetbrains.spek.api.dsl.xdescribe
+import org.jetbrains.spek.api.dsl.xit
 import java.util.*
 
 /**
@@ -73,15 +75,15 @@ object BootstrapSpec : Spek({
     )
 
     val data = D.kPData[KafkaEvents.OPPFOLGINGSPLAN]!! as List<GenericRecord>
-    val producer = KafkaTopicProducer.init<String,GenericRecord>(kafkaProps, "key").produceAsync(data)
+    //val producer = KafkaTopicProducer.init<String,GenericRecord>(kafkaProps, "key").produceAsync(data)
 
-    describe("Test of boostrap") {
-        it("Just starting boostrap") {
+    xdescribe("Test of boostrap") {
+        xit("Just starting boostrap") {
 
             runBlocking {
 
                 bootstrap(kafkaProps, jmsProps)
-                producer.cancelAndJoin()
+              //  producer.cancelAndJoin()
             }
 
             true shouldEqualTo true
