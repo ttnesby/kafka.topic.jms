@@ -6,6 +6,8 @@ import com.ibm.msg.client.wmq.compat.base.internal.MQC
 import io.ktor.application.*
 import io.ktor.http.ContentType
 import io.ktor.response.respondText
+import io.ktor.routing.Route
+import io.ktor.routing.Routing
 import io.ktor.routing.get
 import io.ktor.routing.routing
 import io.ktor.server.engine.embeddedServer
@@ -23,6 +25,7 @@ import no.nav.integrasjon.manager.Problem
 import no.nav.integrasjon.manager.Status
 import org.apache.avro.generic.GenericRecord
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 
 fun main(args: Array<String>) {
@@ -78,6 +81,10 @@ fun bootstrap(kafkaProps: KafkaClientProperties, jmsProps: JMSProperties) {
 
     val status = Channel<Status>()
 
+    log.info { "Starting embedded REST server" }
+    val eREST = embeddedServer(Netty, 8080){}.start()
+    var shutdownhookActive = false
+
     try {
         runBlocking {
 
@@ -87,21 +94,25 @@ fun bootstrap(kafkaProps: KafkaClientProperties, jmsProps: JMSProperties) {
 
                 KafkaTopicConsumer.init<String, GenericRecord>(kafkaProps, jms.data, status).use { consumer ->
 
-                    log.info { "Starting embedded REST server" }
-
-                    // establish asynchronous REST process
-                    val eREST = embeddedServer(Netty, 8080) {
-                        routing {
-                            get("/isAlive") {
-                                call.respondText("kafkatopic2jms is alive", ContentType.Text.Plain)
-                            }
-                            get("/isReady") {
-                                call.respondText("kafkatopic2jms is ready", ContentType.Text.Plain)
-                            }
+                    log.info { "Installing /isAlive and /isReady routes" }
+                    eREST.application.install(Routing) {
+                        get("/isAlive") {
+                            call.respondText("kafkatopic2jms is alive", io.ktor.http.ContentType.Text.Plain)
                         }
-                    }.start(wait = false)
+                        get("/isReady") {
+                            call.respondText("kafkatopic2jms is ready", io.ktor.http.ContentType.Text.Plain)
+                        }
+                    }
+                    log.info { "Routes available" }
 
-                    while (jms.isActive && consumer.isActive) delay(67)
+                    //TODO need better handling...
+                    log.info { "Installing shutdown hook" }
+                    Runtime.getRuntime().addShutdownHook(object : Thread() {
+                        override fun run() { shutdownhookActive = true }
+                    })
+
+
+                    while (jms.isActive && consumer.isActive && !shutdownhookActive) delay(67)
                 }
             }
         }
@@ -111,6 +122,7 @@ fun bootstrap(kafkaProps: KafkaClientProperties, jmsProps: JMSProperties) {
         log.error("Exception", e)
     }
     finally {
+        eREST.stop(100,100,TimeUnit.MILLISECONDS)
         status.close()
         log.info { "@end of bootstrap" }
     }

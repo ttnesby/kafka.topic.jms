@@ -66,7 +66,7 @@ class KafkaTopicConsumer<K, out V>(
                                 // wait for feedback from pipeline
                                 when (status.receive()) {
                                     Ready -> try {
-                                        log.info { "Got Ready from downstream, trying commit" }
+                                        log.info { "Ready from downstream, trying commit" }
                                         c.commitSync()
                                         log.info { "Event $tpo is committed" }
                                     }
@@ -78,7 +78,7 @@ class KafkaTopicConsumer<K, out V>(
                                     }
                                     Problem -> {
                                         // problems downstream
-                                        log.error("Got Problem from downstream, prepare for shutdown")
+                                        log.error("Problem from downstream, NO commit of $tpo, prepare for shutdown")
                                         allGood = false
 
                                     }

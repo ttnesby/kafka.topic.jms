@@ -109,7 +109,7 @@ abstract class JMSTextMessageWriter<V>(
         finally {
             // notify manager if this job is still active
             if (isActive && !status.isClosedForSend) {
-                log.error("Report problem to manager")
+                log.error("Report problem to upstream")
                 status.send(Problem)
             }
         }

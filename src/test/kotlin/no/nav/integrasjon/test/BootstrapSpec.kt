@@ -75,16 +75,16 @@ object BootstrapSpec : Spek({
     )
 
     val data = D.kPData[KafkaEvents.OPPFOLGINGSPLAN]!! as List<GenericRecord>
-    //val producer = KafkaTopicProducer.init<String,GenericRecord>(kafkaProps, "key").produceAsync(data)
+    val producer = KafkaTopicProducer.init<String,GenericRecord>(kafkaProps, "key").produceAsync(data)
 
-    xdescribe("Test of boostrap") {
-        xit("Just starting boostrap") {
+    describe("Test of boostrap") {
+        it("Just starting boostrap") {
 
             bootstrap(kafkaProps, jmsProps)
 
             runBlocking {
 
-                //producer.cancelAndJoin()
+                producer.cancelAndJoin()
             }
 
             true shouldEqualTo true
