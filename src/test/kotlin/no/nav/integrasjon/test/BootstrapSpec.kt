@@ -7,8 +7,8 @@ import com.ibm.msg.client.wmq.WMQConstants
 import com.ibm.msg.client.wmq.compat.base.internal.MQC
 import kotlinx.coroutines.experimental.cancelAndJoin
 import kotlinx.coroutines.experimental.runBlocking
+import no.nav.integrasjon.Bootstrap
 import no.nav.integrasjon.FasitProperties
-import no.nav.integrasjon.bootstrap
 import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaEvents
@@ -80,7 +80,7 @@ object BootstrapSpec : Spek({
     describe("Test of boostrap") {
         it("Just starting boostrap") {
 
-            bootstrap(kafkaProps, jmsProps)
+            Bootstrap.invoke(kafkaProps, jmsProps)
 
             runBlocking {
 
