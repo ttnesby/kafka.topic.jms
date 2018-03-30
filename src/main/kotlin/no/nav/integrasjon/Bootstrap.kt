@@ -26,7 +26,7 @@ object Bootstrap {
     private val log = KotlinLogging.logger {  }
 
     @Volatile var shutdownhookActive = false
-    @Volatile var mainThread = Thread.currentThread()
+    @Volatile var mainThread: Thread = Thread.currentThread()
 
     init {
         log.info { "Installing shutdown hook" }
@@ -44,14 +44,13 @@ object Bootstrap {
         log.info { "Starting pipeline" }
 
         // establish a pipeline of asynchronous coroutines communicating via channels
-        // (upstream) listen to kafka topic and send event to downstream
-        // (downstream) receive kafka events and write TextMessage to JMS backend
+        // upstream - listen to kafka topic and send event to downstream
+        // downstream - receive kafka events and write TextMessage to JMS backend
 
         val status = Channel<Status>()
 
         log.info { "Starting embedded REST server" }
         val eREST = embeddedServer(Netty, 8080){}.start()
-
 
         try {
             runBlocking {
@@ -71,7 +70,7 @@ object Bootstrap {
                                 call.respondText("kafkatopic2jms is ready", ContentType.Text.Plain)
                             }
                         }
-                        log.info { "Routes are available" }
+                        log.info { "/isAlive and /isReady routes are available" }
 
                         while (jms.isActive && consumer.isActive && !shutdownhookActive) delay(67)
 

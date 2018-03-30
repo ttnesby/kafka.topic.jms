@@ -75,17 +75,25 @@ object BootstrapSpec : Spek({
     )
 
     val data = D.kPData[KafkaEvents.OPPFOLGINGSPLAN]!! as List<GenericRecord>
-    val producer = KafkaTopicProducer.init<String,GenericRecord>(kafkaProps, "key").produceAsync(data)
+    val prodProps = KafkaClientProperties(
+            Properties().apply {
+                set(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "PLAINTEXT://localhost:9092")
+                set("schema.registry.url","http://localhost:8081")
+                set(ConsumerConfig.CLIENT_ID_CONFIG, "kafkaTopicProducer")
+            },
+            KafkaEvents.valueOf(fp.kafkaEvent)
+    )
+    val producer = KafkaTopicProducer.init<String,GenericRecord>(prodProps, "key",untilShutdown = true).produceAsync(data)
 
     describe("Test of boostrap") {
         it("Just starting boostrap") {
 
             Bootstrap.invoke(kafkaProps, jmsProps)
 
-            runBlocking {
-
-                producer.cancelAndJoin()
-            }
+//            runBlocking {
+//
+//                producer.cancelAndJoin()
+//            }
 
             true shouldEqualTo true
         }
