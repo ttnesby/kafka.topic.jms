@@ -39,16 +39,15 @@ class KafkaTopicProducer<K, in V>(
                 }
             }
             else {
-                while (!Bootstrap.shutdownhookActive) {
-                    // best effort to send data synchronously
-                    log.info("@start of produceAsync")
 
-                    KafkaProducer<K, V>(clientProperties.baseProps).use { p ->
-                        data.forEach { d ->
-                            p.send(ProducerRecord<K, V>(topic, null, d)).get()
-                            delay(delayTime)
-                            log.debug { "Sent record to kafka topic $topic" }
-                        }
+                // best effort to send data synchronously
+                log.info("@start of produceAsync")
+
+                KafkaProducer<K, V>(clientProperties.baseProps).use { p ->
+                    while (!Bootstrap.shutdownhookActive) data.forEach { d ->
+                        p.send(ProducerRecord<K, V>(topic, null, d)).get()
+                        delay(delayTime)
+                        log.debug { "Sent record to kafka topic $topic" }
                     }
                 }
             }

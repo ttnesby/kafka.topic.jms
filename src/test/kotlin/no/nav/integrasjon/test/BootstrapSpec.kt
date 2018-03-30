@@ -27,8 +27,8 @@ import java.util.*
 /**
  * This object tests the boostrap function
  * Prerequities
- * - local kafka environment running
- * - local mq running using Docker image from
+ * - local kafka environment running using default ports
+ * - local mq running using Docker image from IBM
  */
 
 object BootstrapSpec : Spek({
@@ -63,7 +63,9 @@ object BootstrapSpec : Spek({
                 queueManager = fp.mqQueueManagerName
                 channel = fp.mqChannel
                 transportType = WMQConstants.WMQ_CM_CLIENT
-                clientReconnectOptions = WMQConstants.WMQ_CLIENT_RECONNECT // will try to reconnect
+                connectionNameList = "localhost(${fp.mqPort}),localhost(1415)"
+                //ccdturl = TODO - how to get this from the MQ manager...
+                clientReconnectOptions = WMQConstants.WMQ_CLIENT_RECONNECT_Q_MGR // will try to reconnect
                 clientReconnectTimeout = 60 // reconnection attempts for 5 minutes
                 ccsid = 1208
                 setIntProperty(WMQConstants.JMS_IBM_ENCODING, MQC.MQENC_NATIVE)
@@ -83,7 +85,11 @@ object BootstrapSpec : Spek({
             },
             KafkaEvents.valueOf(fp.kafkaEvent)
     )
-    val producer = KafkaTopicProducer.init<String,GenericRecord>(prodProps, "key",untilShutdown = true).produceAsync(data)
+    val producer = KafkaTopicProducer.init<String,GenericRecord>(
+            prodProps,
+            "key",
+            untilShutdown = true,
+            delayTime = 2_000).produceAsync(data)
 
     describe("Test of boostrap") {
         it("Just starting boostrap") {
