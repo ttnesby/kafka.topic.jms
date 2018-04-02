@@ -16,11 +16,21 @@ import no.nav.integrasjon.jms.ExternalAttachmentToJMS
 import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaTopicConsumer
-import no.nav.integrasjon.manager.Problem
-import no.nav.integrasjon.manager.Status
 import org.apache.avro.generic.GenericRecord
 import java.util.concurrent.TimeUnit
 
+/**
+ * Boostrap is an object for boostrapping this application
+ *
+ * The overall concept
+ * - install a shutddown hook activating a flag if shutdown is activated
+ * - invoke the boostrap
+ *
+ * Invocation of boostrap is a matter of starting 3 asynchronous processes
+ * 1. Start the downstream part - ExternalAttachmentToJMS - write TextMessages to JMS backend
+ * 2. Start the upstream part - KafkaTopicConsumer - listen to kafka topic and send event downstream
+ * 3. Activate REST service with basic NAIS functionality (isAlive, isReady and metrics)
+ */
 object Bootstrap {
 
     private val log = KotlinLogging.logger {  }

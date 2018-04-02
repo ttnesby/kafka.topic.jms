@@ -4,9 +4,9 @@ import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.SendChannel
 import mu.KotlinLogging
-import no.nav.integrasjon.manager.Problem
-import no.nav.integrasjon.manager.Ready
-import no.nav.integrasjon.manager.Status
+import no.nav.integrasjon.Problem
+import no.nav.integrasjon.Ready
+import no.nav.integrasjon.Status
 import org.apache.kafka.clients.consumer.CommitFailedException
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -14,6 +14,31 @@ import org.apache.kafka.common.TopicPartition
 import java.util.*
 import kotlin.reflect.full.starProjectedType
 
+/**
+ * KafkaTopicConsumer is a generic class for consuming events from a kafka topic
+ * By implementing the AutoCloseable interface, this class hides utilization of kotlin coroutines
+ *
+ * The overall concept
+ *
+ * A long living asynchronous process [consumeAsync] performs the following simple tasks
+ * - poll an event from kafka topic
+ * - send event to downstream
+ * - wait for status from downstream
+ * - if status Ready, commit event otherwise shutdown
+ *
+ * @param K type of key data
+ * @param V type of event data
+ * @param clientProperties set of kafka properties++ - see [init] and [propertiesInjection]
+ * @param toDownstream - send channel for event to downstream
+ * @param status - receive channel from downstream
+ *
+ * @constructor will automatically initiate the [consumeAsync] process
+ *
+ * @property isActive whether the [consumeAsync] is active or not
+ *
+ * Use the [init] function in companion object for instanciating
+ *
+ */
 class KafkaTopicConsumer<K, out V>(
         private val clientProperties: KafkaClientProperties,
         toDownstream: SendChannel<V>,
@@ -105,6 +130,12 @@ class KafkaTopicConsumer<K, out V>(
 
         private val log = KotlinLogging.logger {  }
 
+        /**
+         * init is the factory function for instaciating this class
+         * @param clientProperties kafka properties++
+         * @param toDownstream send channel for event to downstream
+         * @param status receive channel from downstream
+         */
         inline fun <reified K, reified V> init(
                 clientProperties: KafkaClientProperties,
                 toDownstream: SendChannel<V>,
@@ -117,6 +148,13 @@ class KafkaTopicConsumer<K, out V>(
                 toDownstream,
                 status)
 
+        /**
+         * propertiesInjection add required set of properties
+         * The minimum set of pre-configured properties should be
+         * - kafka broker
+         * - schema reg.
+         * - client id
+         */
         inline fun <reified K, reified V> propertiesInjection(baseProps: Properties) = baseProps.apply {
             set(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(K::class.starProjectedType))
             set(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, getKafkaDeserializer(V::class.starProjectedType))
@@ -130,6 +168,9 @@ class KafkaTopicConsumer<K, out V>(
             set(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
         }
 
+        /**
+         * event2Topic is a mapping from KafkaEvents enum til specific topic in the kafka environment
+         */
         fun event2Topic(kafkaEvent: KafkaEvents): String = when (kafkaEvent) {
             KafkaEvents.OPPFOLGINGSPLAN -> "oppfolgingplan"
             KafkaEvents.BANKKONTONR -> "bankkontonr"

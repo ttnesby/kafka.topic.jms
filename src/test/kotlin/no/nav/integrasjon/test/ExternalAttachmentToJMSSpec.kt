@@ -11,8 +11,8 @@ import no.nav.integrasjon.jms.JMSTextMessageWriter
 import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaEvents
 import no.nav.integrasjon.kafka.KafkaTopicConsumer
-import no.nav.integrasjon.manager.Problem
-import no.nav.integrasjon.manager.Status
+import no.nav.integrasjon.Problem
+import no.nav.integrasjon.Status
 import no.nav.integrasjon.test.utils.D.kPData
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import no.nav.integrasjon.test.utils.KafkaTopicProducer
@@ -29,8 +29,11 @@ import java.util.*
 import javax.jms.Session
 import javax.jms.TextMessage
 
-
-object ManagePipelineSpec : Spek({
+/**
+ * For completeness, this object do a few more tests in the beginning, before
+ * focusing on test of the relevant class. See function produceToJMSMP for details
+ */
+object ExternalAttachmentToJMSSpec : Spek({
 
 
     // create the topics to be created in kafka env

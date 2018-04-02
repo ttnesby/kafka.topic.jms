@@ -5,19 +5,44 @@ import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.SendChannel
 import mu.KotlinLogging
-import no.nav.integrasjon.manager.Problem
-import no.nav.integrasjon.manager.Ready
-import no.nav.integrasjon.manager.Status
+import no.nav.integrasjon.Problem
+import no.nav.integrasjon.Ready
+import no.nav.integrasjon.Status
 import javax.jms.*
 import kotlin.IllegalStateException
 
+/**
+ * JMSTextMessageWriter is an generic abstract class for sending TextMessage to a JMS-enabled backend system
+ * By implementing the AutoCloseable interface, this class hides utilization of kotlin coroutines
+ *
+ * The overall concept
+ *
+ * A long living asynchronous process [writeAsync] performs the following simple tasks
+ * - wait for reception of a data unit of type [V] from upstream
+ * - [transform] the data unit to [Result]
+ * - send the text message part of result to JMS backend
+ * - send status (Ready, Problem) back to upstream
+ *
+ * @param V type of data to receive and send as text message to JMS
+ * @param jmsProperties required details for establishing a JMS connection
+ * @param status a channel for sending status
+ *
+ * @constructor will automatically initiate the [writeAsync] process
+ *
+ * @property data as a channel for receiving data of type [V]
+ * @property isActive whether the [writeAsync] is active or not
+ *
+ * The user of the class must check if status channel has problem after start
+ */
 abstract class JMSTextMessageWriter<V>(
         private val jmsProperties: JMSProperties,
         status: SendChannel<Status>
         ) : AutoCloseable {
 
+    // Result from the transform function, as a data class
     protected data class Result(val status: Boolean = false, val txtMsg: TextMessage)
 
+    // data to receive
     val data = Channel<V>()
     private val asyncProcess: Job
 
@@ -116,6 +141,7 @@ abstract class JMSTextMessageWriter<V>(
         log.info("@end of writeAsync - goodbye!")
     }
 
+    // the transform is dependent on the session for creating correct JMS TextMessage
     protected abstract fun transform(session: Session, event: V): Result
 
     companion object {

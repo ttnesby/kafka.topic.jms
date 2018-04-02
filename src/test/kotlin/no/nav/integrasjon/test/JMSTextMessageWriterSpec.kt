@@ -10,8 +10,8 @@ import no.nav.integrasjon.jms.ExternalAttachmentToJMS
 import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.jms.JMSTextMessageWriter
 import no.nav.integrasjon.kafka.KafkaEvents
-import no.nav.integrasjon.manager.Problem
-import no.nav.integrasjon.manager.Status
+import no.nav.integrasjon.Problem
+import no.nav.integrasjon.Status
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import org.amshove.kluent.shouldContainAll
 import org.apache.activemq.ActiveMQConnectionFactory
@@ -31,7 +31,7 @@ object JMSTextMessageWriterSpec : Spek({
 
     //val log = KotlinLogging.logger {  }
 
-    // global use of one jms settings
+    // global use of one jms settings - embedded active MQ
     val jmsDetails = JMSProperties(
             ActiveMQConnectionFactory("vm://localhost?broker.persistent=false"),
             "toDownstream",
@@ -39,6 +39,7 @@ object JMSTextMessageWriterSpec : Spek({
             ""
     )
 
+    // implement a String version of JMSTextMessageWriter - transforming to upper case
     class TrfString(status: SendChannel<Status>) : JMSTextMessageWriter<String>(jmsDetails, status) {
         override fun transform(session: Session, event: String): Result =
                 Result(
@@ -47,6 +48,7 @@ object JMSTextMessageWriterSpec : Spek({
                 )
     }
 
+    // implement a Integer version of JMSTextMessageWriter - transforming each no to square
     class TrfInt(status: SendChannel<Status>) : JMSTextMessageWriter<Int>(jmsDetails, status) {
         override fun transform(session: Session, event: Int): Result =
                 Result(
@@ -55,6 +57,7 @@ object JMSTextMessageWriterSpec : Spek({
                 )
     }
 
+    // implement a Apache Avro version of JMSTextMessageWriter - no special transformation
     class TrfAvro(status: SendChannel<Status>) : JMSTextMessageWriter<GenericRecord>(jmsDetails, status) {
         override fun transform(session: Session, event: GenericRecord): Result =
                 Result(

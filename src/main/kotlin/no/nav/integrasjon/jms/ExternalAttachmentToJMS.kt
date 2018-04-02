@@ -2,12 +2,20 @@ package no.nav.integrasjon.jms
 
 import kotlinx.coroutines.experimental.channels.SendChannel
 import no.nav.integrasjon.kafka.KafkaEvents
-import no.nav.integrasjon.manager.Status
+import no.nav.integrasjon.Status
 import org.apache.avro.generic.GenericRecord
 import java.io.StringReader
 import java.io.StringWriter
 import javax.jms.Session
 
+/**
+ * ExternalAttachmentToJMS implements the JMSTextMessageWriter for Altinnkanal 2 specific avro schemas
+ * See src/main/resources/external_attachment.avsc
+ *
+ * @param jmsProperties for creating connection to JMS backend
+ * @param status for sending status messages back to upstream
+ * @param kafkaEvent decide how to transform the different altinn messages from Altinnkanal 2
+ */
 class ExternalAttachmentToJMS(
         jmsProperties: JMSProperties,
         status: SendChannel<Status>,
@@ -27,8 +35,8 @@ class ExternalAttachmentToJMS(
 
     override fun transform(session: Session, event: GenericRecord): Result {
 
-        val xml = event["batch"].toString()
-        val xe = XMLExtractor(xml)
+        val xml = event["batch"].toString() // get the xml message from altinn
+        val xe = XMLExtractor(xml)  // extract relevant elements
 
         return when(event["sc"].toString()) {
 

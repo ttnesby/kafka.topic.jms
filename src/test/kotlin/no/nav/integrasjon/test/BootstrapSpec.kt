@@ -5,8 +5,6 @@ package no.nav.integrasjon.test
 import com.ibm.mq.jms.MQConnectionFactory
 import com.ibm.msg.client.wmq.WMQConstants
 import com.ibm.msg.client.wmq.compat.base.internal.MQC
-import kotlinx.coroutines.experimental.cancelAndJoin
-import kotlinx.coroutines.experimental.runBlocking
 import no.nav.integrasjon.Bootstrap
 import no.nav.integrasjon.FasitProperties
 import no.nav.integrasjon.jms.JMSProperties
@@ -20,15 +18,13 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
-import org.jetbrains.spek.api.dsl.xdescribe
-import org.jetbrains.spek.api.dsl.xit
 import java.util.*
 
 /**
- * This object tests the boostrap function
+ * This object tests the boostrap object
  * Prerequities
  * - local kafka environment running using default ports
- * - local mq running using Docker image from IBM
+ * - local mq running using Docker image from IBM, using default settings
  */
 
 object BootstrapSpec : Spek({
@@ -85,7 +81,9 @@ object BootstrapSpec : Spek({
             },
             KafkaEvents.valueOf(fp.kafkaEvent)
     )
-    val producer = KafkaTopicProducer.init<String,GenericRecord>(
+
+    // trigger the producer
+    KafkaTopicProducer.init<String,GenericRecord>(
             prodProps,
             "key",
             untilShutdown = true,
@@ -95,11 +93,6 @@ object BootstrapSpec : Spek({
         it("Just starting boostrap") {
 
             Bootstrap.invoke(kafkaProps, jmsProps)
-
-//            runBlocking {
-//
-//                producer.cancelAndJoin()
-//            }
 
             true shouldEqualTo true
         }

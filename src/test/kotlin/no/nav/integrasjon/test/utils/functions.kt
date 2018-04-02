@@ -5,12 +5,14 @@ import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
 import kotlinx.coroutines.experimental.withTimeoutOrNull
+import no.nav.integrasjon.Problem
+import no.nav.integrasjon.Ready
+import no.nav.integrasjon.Status
 import no.nav.integrasjon.jms.ExternalAttachmentToJMS
 import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaEvents
 import no.nav.integrasjon.kafka.KafkaTopicConsumer
-import no.nav.integrasjon.manager.*
 import org.apache.avro.generic.GenericRecord
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
