@@ -113,12 +113,19 @@ abstract class JMSTextMessageWriter<V>(
                             }
                         }
                         catch (e: Exception) {
-                            // MessageFormatException, UnsupportedOperationException
-                            // InvalidDestinationException, JMSException
-                            log.error("Exception", e)
-                            log.error("Send Problem to upstream and prepare for shutdown")
-                            allGood = false
-                            status.send(Problem)
+                            when (e) {
+                                is JobCancellationException -> {/* it's ok to be cancelled by manager*/
+                                }
+                                else -> {
+
+                                    // MessageFormatException, UnsupportedOperationException
+                                    // InvalidDestinationException, JMSException
+                                    log.error("Exception", e)
+                                    log.error("Send Problem to upstream and prepare for shutdown")
+                                    allGood = false
+                                    status.send(Problem)
+                                }
+                            }
                         }
                     }
                 }
@@ -127,7 +134,7 @@ abstract class JMSTextMessageWriter<V>(
         // JMSSecurityException, JMSException, ClosedReceiveChannelException
         catch (e: Exception) {
             when(e) {
-                is CancellationException -> {/* it's ok to be cancelled by manager*/}
+                is JobCancellationException -> {/* it's ok to be cancelled by manager*/}
                 else -> log.error("Exception", e)
             }
         }

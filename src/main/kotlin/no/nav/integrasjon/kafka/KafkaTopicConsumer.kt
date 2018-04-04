@@ -117,7 +117,7 @@ class KafkaTopicConsumer<K, out V>(
         // IllegalArgumentException, IllegalStateException
         catch (e: Exception) {
             when (e) {
-                is CancellationException -> {/* it's ok to be cancelled by manager*/ }
+                is JobCancellationException -> {/* it's ok to be cancelled by manager*/ }
                 else -> log.error("Exception", e)
             }
         }
@@ -172,10 +172,10 @@ class KafkaTopicConsumer<K, out V>(
          * event2Topic is a mapping from KafkaEvents enum til specific topic in the kafka environment
          */
         fun event2Topic(kafkaEvent: KafkaEvents): String = when (kafkaEvent) {
-            KafkaEvents.OPPFOLGINGSPLAN -> "oppfolgingplan"
-            KafkaEvents.BANKKONTONR -> "bankkontonr"
-            KafkaEvents.MAALEKORT -> "maalekort"
-            KafkaEvents.BARNEHAGELISTE -> "barnehageliste"
+            KafkaEvents.OPPFOLGINGSPLAN -> "aapen-altinn-oppfolgingsplan-Mottatt"
+            KafkaEvents.BANKKONTONR -> "aapen-altinn-bankkontonummer-Mottatt"
+            KafkaEvents.MAALEKORT -> "aapen-altinn-maalekort-Mottatt"
+            KafkaEvents.BARNEHAGELISTE -> "aapen-altinn-barnehageliste-Mottatt"
             KafkaEvents.STRING -> "string"
             KafkaEvents.INT -> "int"
             KafkaEvents.AVRO -> "avro"

@@ -4,10 +4,12 @@ import io.ktor.application.call
 import io.ktor.application.install
 import io.ktor.http.ContentType
 import io.ktor.response.respondText
+import io.ktor.response.respondWrite
 import io.ktor.routing.Routing
 import io.ktor.routing.get
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
+import io.prometheus.client.exporter.common.TextFormat
 import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
@@ -71,20 +73,35 @@ object Bootstrap {
 
                     KafkaTopicConsumer.init<String, GenericRecord>(kafkaProps, jms.data, status).use { consumer ->
 
-                        log.info { "Installing /isAlive and /isReady routes" }
-                        eREST.application.install(Routing) {
-                            get("/isAlive") {
-                                call.respondText("kafkatopic2jms is alive", ContentType.Text.Plain)
+                        ApplicationMetrics().use { appMetrics ->
+
+                            log.info { "Installing /isAlive and /isReady routes" }
+                            eREST.application.install(Routing) {
+                                get("/isAlive") {
+                                    call.respondText("kafkatopic2jms is alive", ContentType.Text.Plain)
+                                }
+                                get("/isReady") {
+                                    call.respondText("kafkatopic2jms is ready", ContentType.Text.Plain)
+                                }
+                                get("/prometheus") {
+                                    val names = call.request.queryParameters.getAll("name[]")?.toSet() ?: setOf()
+                                    call.respondWrite(ContentType.parse(TextFormat.CONTENT_TYPE_004)) {
+                                        TextFormat.write004(
+                                                this,
+                                                appMetrics.collectorRegistry.filteredMetricFamilySamples(names))
+                                    }
+                                }
                             }
-                            get("/isReady") {
-                                call.respondText("kafkatopic2jms is ready", ContentType.Text.Plain)
-                            }
+                            log.info { "/isAlive and /isReady routes are available" }
+
+                            while (
+                                    jms.isActive &&
+                                    consumer.isActive &&
+                                    appMetrics.isActive &&
+                                    !shutdownhookActive) delay(67)
+
+                            if (shutdownhookActive) log.info { "Shutdown hook actived - preparing shutdown" }
                         }
-                        log.info { "/isAlive and /isReady routes are available" }
-
-                        while (jms.isActive && consumer.isActive && !shutdownhookActive) delay(67)
-
-                        if (shutdownhookActive) log.info { "Shutdown hook actived - preparing shutdown" }
                     }
                 }
             }
