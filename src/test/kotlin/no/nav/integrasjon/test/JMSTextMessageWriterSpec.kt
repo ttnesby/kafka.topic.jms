@@ -6,6 +6,7 @@ import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.SendChannel
 import kotlinx.coroutines.experimental.runBlocking
 import kotlinx.coroutines.experimental.withTimeoutOrNull
+import no.nav.integrasjon.JMSMetric
 import no.nav.integrasjon.jms.ExternalAttachmentToJMS
 import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.jms.JMSTextMessageWriter
@@ -40,7 +41,9 @@ object JMSTextMessageWriterSpec : Spek({
     )
 
     // implement a String version of JMSTextMessageWriter - transforming to upper case
-    class TrfString(status: SendChannel<Status>) : JMSTextMessageWriter<String>(jmsDetails, status) {
+    class TrfString(
+            status: SendChannel<Status>,
+            jmsMetric: SendChannel<JMSMetric>) : JMSTextMessageWriter<String>(jmsDetails, status, jmsMetric) {
         override fun transform(session: Session, event: String): Result =
                 Result(
                         status = true,
@@ -49,7 +52,9 @@ object JMSTextMessageWriterSpec : Spek({
     }
 
     // implement a Integer version of JMSTextMessageWriter - transforming each no to square
-    class TrfInt(status: SendChannel<Status>) : JMSTextMessageWriter<Int>(jmsDetails, status) {
+    class TrfInt(
+            status: SendChannel<Status>,
+            jmsMetric: SendChannel<JMSMetric>) : JMSTextMessageWriter<Int>(jmsDetails, status, jmsMetric) {
         override fun transform(session: Session, event: Int): Result =
                 Result(
                         status = true,
@@ -58,7 +63,9 @@ object JMSTextMessageWriterSpec : Spek({
     }
 
     // implement a Apache Avro version of JMSTextMessageWriter - no special transformation
-    class TrfAvro(status: SendChannel<Status>) : JMSTextMessageWriter<GenericRecord>(jmsDetails, status) {
+    class TrfAvro(
+            status: SendChannel<Status>,
+            jmsMetric: SendChannel<JMSMetric>) : JMSTextMessageWriter<GenericRecord>(jmsDetails, status, jmsMetric) {
         override fun transform(session: Session, event: GenericRecord): Result =
                 Result(
                         status = true,
@@ -80,7 +87,9 @@ object JMSTextMessageWriterSpec : Spek({
                 val result = mutableListOf<String>()
 
                 val status = Channel<Status>()
-                TrfString(status).use { jms ->
+                val jmsMetric = Channel<JMSMetric>(50)
+
+                TrfString(status, jmsMetric).use { jms ->
 
                     runBlocking {
                         if (status.receive() == Problem) return@runBlocking
@@ -107,7 +116,9 @@ object JMSTextMessageWriterSpec : Spek({
                 val result = mutableListOf<String>()
 
                 val status = Channel<Status>()
-                TrfInt(status).use { jms ->
+                val jmsMetric = Channel<JMSMetric>(50)
+
+                TrfInt(status, jmsMetric).use { jms ->
 
                     runBlocking {
                         if (status.receive() == Problem) return@runBlocking
@@ -134,7 +145,9 @@ object JMSTextMessageWriterSpec : Spek({
                 val result = mutableListOf<String>()
 
                 val status = Channel<Status>()
-                TrfAvro(status).use { jms ->
+                val jmsMetric = Channel<JMSMetric>(50)
+
+                TrfAvro(status, jmsMetric).use { jms ->
 
                     runBlocking {
                         if (status.receive() == Problem) return@runBlocking
@@ -161,7 +174,13 @@ object JMSTextMessageWriterSpec : Spek({
                 val result = mutableListOf<Int>()
 
                 val status = Channel<Status>()
-                ExternalAttachmentToJMS(jmsDetails, status, KafkaEvents.MUSIC ).use { jms ->
+                val jmsMetric = Channel<JMSMetric>(50)
+
+                ExternalAttachmentToJMS(
+                        jmsDetails,
+                        status,
+                        jmsMetric,
+                        KafkaEvents.MUSIC ).use { jms ->
 
                     runBlocking {
                         if (status.receive() == Problem) return@runBlocking
@@ -190,7 +209,13 @@ object JMSTextMessageWriterSpec : Spek({
                 var result = 0
 
                 val status = Channel<Status>()
-                ExternalAttachmentToJMS(jmsDetails, status, KafkaEvents.OPPFOLGINGSPLAN ).use { jms ->
+                val jmsMetric = Channel<JMSMetric>(50)
+
+                ExternalAttachmentToJMS(
+                        jmsDetails,
+                        status,
+                        jmsMetric,
+                        KafkaEvents.OPPFOLGINGSPLAN ).use { jms ->
 
                     runBlocking {
                         if (status.receive() == Problem) return@runBlocking

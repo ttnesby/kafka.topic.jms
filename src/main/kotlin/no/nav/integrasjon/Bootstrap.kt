@@ -38,7 +38,7 @@ object Bootstrap {
     private val log = KotlinLogging.logger {  }
 
     @Volatile var shutdownhookActive = false
-    @Volatile var mainThread: Thread = Thread.currentThread()
+    private val mainThread: Thread = Thread.currentThread()
 
     init {
         log.info { "Installing shutdown hook" }
@@ -56,10 +56,12 @@ object Bootstrap {
         log.info { "Starting pipeline" }
 
         // establish a pipeline of asynchronous coroutines communicating via channels
-        // upstream - listen to kafka topic and send event to downstream
+        // starting reverse order, downstream, then upstream
         // downstream - receive kafka events and write TextMessage to JMS backend
+        // upstream - listen to kafka topic and send event to downstream
 
         val status = Channel<Status>()
+        val jmsMetric = Channel<JMSMetric>(100)
 
         log.info { "Starting embedded REST server" }
         val eREST = embeddedServer(Netty, 8080){}.start()
@@ -67,15 +69,15 @@ object Bootstrap {
         try {
             runBlocking {
 
-                ExternalAttachmentToJMS(jmsProps, status, kafkaProps.kafkaEvent).use { jms ->
+                ExternalAttachmentToJMS(jmsProps, status, jmsMetric, kafkaProps.kafkaEvent).use { jms ->
 
                     if (status.receive() == Problem) return@use
 
                     KafkaTopicConsumer.init<String, GenericRecord>(kafkaProps, jms.data, status).use { consumer ->
 
-                        ApplicationMetrics().use { appMetrics ->
+                        ApplicationMetrics(jmsMetric).use { appMetrics ->
 
-                            log.info { "Installing /isAlive and /isReady routes" }
+                            log.info { "Installing /isAlive, /isReady and /prometheus routes" }
                             eREST.application.install(Routing) {
                                 get("/isAlive") {
                                     call.respondText("kafkatopic2jms is alive", ContentType.Text.Plain)
@@ -92,7 +94,7 @@ object Bootstrap {
                                     }
                                 }
                             }
-                            log.info { "/isAlive and /isReady routes are available" }
+                            log.info { "/isAlive, /isReady and /prometheus routes are available" }
 
                             while (
                                     jms.isActive &&
@@ -105,7 +107,6 @@ object Bootstrap {
                     }
                 }
             }
-
         }
         catch (e: Exception) {
             log.error("Exception", e)
@@ -113,6 +114,7 @@ object Bootstrap {
         finally {
             eREST.stop(100,100, TimeUnit.MILLISECONDS)
             status.close()
+            jmsMetric.close()
             log.info { "@end of bootstrap" }
         }
     }

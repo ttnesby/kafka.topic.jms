@@ -18,6 +18,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.jetbrains.spek.api.Spek
 import org.jetbrains.spek.api.dsl.describe
 import org.jetbrains.spek.api.dsl.it
+import org.jetbrains.spek.api.dsl.xdescribe
 import java.util.*
 
 /**
@@ -83,13 +84,13 @@ object BootstrapSpec : Spek({
     )
 
     // trigger the producer
-    KafkaTopicProducer.init<String,GenericRecord>(
+/*    KafkaTopicProducer.init<String,GenericRecord>(
             prodProps,
             "key",
             untilShutdown = true,
-            delayTime = 2_000).produceAsync(data)
+            delayTime = 1_000).produceAsync(data)*/
 
-    describe("Test of boostrap") {
+    xdescribe("Test of boostrap") {
         it("Just starting boostrap") {
 
             Bootstrap.invoke(kafkaProps, jmsProps)

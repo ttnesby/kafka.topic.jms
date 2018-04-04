@@ -6,6 +6,7 @@ import kotlinx.coroutines.experimental.*
 import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.SendChannel
 import no.nav.common.KafkaEnvironment
+import no.nav.integrasjon.JMSMetric
 import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.jms.JMSTextMessageWriter
 import no.nav.integrasjon.kafka.KafkaClientProperties
@@ -64,7 +65,9 @@ object ExternalAttachmentToJMSSpec : Spek({
             ""
     )
 
-    class TrfString(status: SendChannel<Status>) : JMSTextMessageWriter<String>(jmsDetails, status) {
+    class TrfString(
+            status: SendChannel<Status>,
+            jmsMetric: SendChannel<JMSMetric>) : JMSTextMessageWriter<String>(jmsDetails, status, jmsMetric) {
         override fun transform(session: Session, event: String): Result =
                 Result(
                         status = true,
@@ -72,7 +75,9 @@ object ExternalAttachmentToJMSSpec : Spek({
                 )
     }
 
-    class TrfInt(status: SendChannel<Status>) : JMSTextMessageWriter<Int>(jmsDetails, status) {
+    class TrfInt(
+            status: SendChannel<Status>,
+            jmsMetric: SendChannel<JMSMetric>) : JMSTextMessageWriter<Int>(jmsDetails, status, jmsMetric) {
         override fun transform(session: Session, event: Int): Result =
                 Result(
                         status = true,
@@ -80,7 +85,9 @@ object ExternalAttachmentToJMSSpec : Spek({
                 )
     }
 
-    class TrfAvro(status: SendChannel<Status>) : JMSTextMessageWriter<GenericRecord>(jmsDetails, status) {
+    class TrfAvro(
+            status: SendChannel<Status>,
+            jmsMetric: SendChannel<JMSMetric>) : JMSTextMessageWriter<GenericRecord>(jmsDetails, status, jmsMetric) {
         override fun transform(session: Session, event: GenericRecord): Result =
                 Result(
                         status = true,
@@ -108,11 +115,12 @@ object ExternalAttachmentToJMSSpec : Spek({
 
                 val producer = KafkaTopicProducer.init<String,String>(cliProps, "key").produceAsync(data)
                 val status = Channel<Status>()
+                val jmsMetric = Channel<JMSMetric>(50)
 
                 val result = mutableListOf<String>()
 
                 runBlocking {
-                    TrfString(status).use { jms ->
+                    TrfString(status, jmsMetric).use { jms ->
 
                         if (status.receive() == Problem) return@use
 
@@ -145,11 +153,12 @@ object ExternalAttachmentToJMSSpec : Spek({
 
                 val producer = KafkaTopicProducer.init<String,Int>(cliProps, "key").produceAsync(data)
                 val status = Channel<Status>()
+                val jmsMetric = Channel<JMSMetric>(50)
 
                 val result = mutableListOf<Int>()
 
                 runBlocking {
-                    TrfInt(status).use { jms ->
+                    TrfInt(status, jmsMetric).use { jms ->
 
                         if (status.receive() == Problem) return@use
 
@@ -182,11 +191,12 @@ object ExternalAttachmentToJMSSpec : Spek({
 
                 val producer = KafkaTopicProducer.init<String,GenericRecord>(cliProps, "key").produceAsync(data)
                 val status = Channel<Status>()
+                val jmsMetric = Channel<JMSMetric>(50)
 
                 val result = mutableListOf<String>()
 
                 runBlocking {
-                    TrfAvro(status).use { jms ->
+                    TrfAvro(status, jmsMetric).use { jms ->
 
                         if (status.receive() == Problem) return@use
 

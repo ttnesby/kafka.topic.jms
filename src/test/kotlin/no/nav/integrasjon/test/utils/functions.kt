@@ -5,6 +5,7 @@ import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.delay
 import kotlinx.coroutines.experimental.runBlocking
 import kotlinx.coroutines.experimental.withTimeoutOrNull
+import no.nav.integrasjon.JMSMetric
 import no.nav.integrasjon.Problem
 import no.nav.integrasjon.Ready
 import no.nav.integrasjon.Status
@@ -95,10 +96,11 @@ fun produceToJMSMP(
 
     val producer = KafkaTopicProducer.init<String, GenericRecord>(cliProps, "key").produceAsync(data)
     val status = Channel<Status>()
+    val jmsMetric = Channel<JMSMetric>(50)
     var result = 0
 
     runBlocking {
-        ExternalAttachmentToJMS(jmsProps, status, kafkaEvent).use { jms ->
+        ExternalAttachmentToJMS(jmsProps, status, jmsMetric, kafkaEvent).use { jms ->
 
             if (status.receive() == Problem) return@runBlocking
 

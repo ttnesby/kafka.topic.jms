@@ -5,9 +5,7 @@ import kotlinx.coroutines.experimental.channels.Channel
 import kotlinx.coroutines.experimental.channels.ReceiveChannel
 import kotlinx.coroutines.experimental.channels.SendChannel
 import mu.KotlinLogging
-import no.nav.integrasjon.Problem
-import no.nav.integrasjon.Ready
-import no.nav.integrasjon.Status
+import no.nav.integrasjon.*
 import javax.jms.*
 import kotlin.IllegalStateException
 
@@ -36,8 +34,8 @@ import kotlin.IllegalStateException
  */
 abstract class JMSTextMessageWriter<V>(
         private val jmsProperties: JMSProperties,
-        status: SendChannel<Status>
-        ) : AutoCloseable {
+        status: SendChannel<Status>,
+        jmsMetric: SendChannel<JMSMetric>) : AutoCloseable {
 
     // Result from the transform function, as a data class
     protected data class Result(val status: Boolean = false, val txtMsg: TextMessage)
@@ -48,7 +46,7 @@ abstract class JMSTextMessageWriter<V>(
 
     init {
         log.info { "Starting" }
-        asyncProcess = writeAsync(data, status)
+        asyncProcess = writeAsync(data, status, jmsMetric)
     }
 
     val isActive
@@ -63,7 +61,8 @@ abstract class JMSTextMessageWriter<V>(
 
     private fun writeAsync(
             data: ReceiveChannel<V>,
-            status: SendChannel<Status>) = async {
+            status: SendChannel<Status>,
+            jmsMetric: SendChannel<JMSMetric>) = async {
 
         try {
             val connection = jmsProperties.connFactory.createConnection(jmsProperties.username, jmsProperties.password)
@@ -99,6 +98,7 @@ abstract class JMSTextMessageWriter<V>(
                                     producer.send(result.txtMsg)
 
                                     log.info { "Send to JMS completed" }
+                                    jmsMetric.send(SentToJMS)
 
                                     log.info {"Send Ready to upstream"}
                                     status.send(Ready)
