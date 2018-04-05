@@ -63,17 +63,21 @@ class ApplicationMetrics(jmsMetric: ReceiveChannel<JMSMetric>) : AutoCloseable {
                 attrCCM.sortBy { it.name }
 
                 val listGaugesCFMM = attrCFMM.map { attr ->
-                    log.info { "Adding gauge ${attr.name.replace("-","_").replace(".","_")}" }
-                    Gauge.build(
-                            attr.name.replace("-","_").replace(".","_"),
-                            attr.description).namespace("kafka_metrics").register()
+                    val name = attr.name.replace("-" ,"_").replace(".","_")
+                    log.info { "Adding gauge $name" }
+                    Gauge
+                            .build(name, attr.description)
+                            .namespace("kafka_metrics")
+                            .register()
                 }.toList()
 
                 val listGaugesCCM = attrCCM.map { attr ->
-                    log.info { "Adding gauge ${attr.name.replace("-","_").replace(".","_")}" }
-                    Gauge.build(
-                            attr.name.replace("-","_").replace(".","_"),
-                            attr.description).namespace("kafka_metrics").register()
+                    val name = attr.name.replace("-" ,"_").replace(".","_")
+                    log.info { "Adding gauge $name" }
+                    Gauge
+                            .build(name, attr.description)
+                            .namespace("kafka_metrics")
+                            .register()
                 }.toList()
 
                 log.info { "Adding counter sent_to_jms" }
