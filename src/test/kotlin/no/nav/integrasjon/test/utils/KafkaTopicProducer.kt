@@ -4,6 +4,7 @@ import kotlinx.coroutines.experimental.CancellationException
 import kotlinx.coroutines.experimental.async
 import kotlinx.coroutines.experimental.delay
 import mu.KotlinLogging
+import no.nav.integrasjon.Bootstrap
 import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaTopicConsumer
 import no.nav.integrasjon.kafka.getKafkaSerializer
@@ -14,21 +15,40 @@ import java.util.*
 import kotlin.reflect.full.starProjectedType
 
 
-class KafkaTopicProducer<K, in V>(private val clientProperties: KafkaClientProperties, private val key: K) {
+class KafkaTopicProducer<K, in V>(
+        private val clientProperties: KafkaClientProperties,
+        private val key: K,
+        private val untilShutdown: Boolean = false,
+        private val delayTime: Long = 250) {
 
     private val topic = KafkaTopicConsumer.event2Topic(clientProperties.kafkaEvent)
 
     fun produceAsync(data: List<V>) = async {
 
         try {
-            // best effort to send data synchronously
-            log.info("@start of produceAsync")
+            if (!untilShutdown) {
+                // best effort to send data synchronously
+                log.info("@start of produceAsync")
 
-            KafkaProducer<K, V>(clientProperties.baseProps).use { p ->
-                data.forEach { d ->
-                    p.send(ProducerRecord<K, V>(topic, null, d)).get()
-                    //delay(250)
-                    log.debug { "Sent record to kafka topic $topic" }
+                KafkaProducer<K, V>(clientProperties.baseProps).use { p ->
+                    data.forEach { d ->
+                        p.send(ProducerRecord<K, V>(topic, null, d)).get()
+                        delay(delayTime)
+                        log.debug { "Sent record to kafka topic $topic" }
+                    }
+                }
+            }
+            else {
+
+                // best effort to send data synchronously
+                log.info("@start of produceAsync")
+
+                KafkaProducer<K, V>(clientProperties.baseProps).use { p ->
+                    while (!Bootstrap.shutdownhookActive) data.forEach { d ->
+                        p.send(ProducerRecord<K, V>(topic, null, d)).get()
+                        delay(delayTime)
+                        log.debug { "Sent record to kafka topic $topic" }
+                    }
                 }
             }
         }
@@ -48,11 +68,13 @@ class KafkaTopicProducer<K, in V>(private val clientProperties: KafkaClientPrope
 
         inline fun <reified K, reified V> init(
                 clientProperties: KafkaClientProperties,
-                key: K) = KafkaTopicProducer<K,V>(
+                key: K, untilShutdown: Boolean = false, delayTime: Long = 250) = KafkaTopicProducer<K,V>(
                 KafkaClientProperties(
                         producerInjection<K,V>(clientProperties.baseProps),
                         clientProperties.kafkaEvent),
-                key)
+                key,
+                untilShutdown,
+                delayTime)
 
         inline fun <reified K, reified V> producerInjection(baseProps: Properties) = baseProps.apply {
             set(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, getKafkaSerializer(K::class.starProjectedType))

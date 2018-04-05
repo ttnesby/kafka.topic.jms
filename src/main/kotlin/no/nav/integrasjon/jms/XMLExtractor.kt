@@ -10,7 +10,7 @@ import javax.xml.stream.events.XMLEvent
  * This class is a sax parser restricted to Altinn ReceiveOnlineBatchExternalAttachment interface
  * See OnlineBatchReceiver.wsdl, OnlineBatchReceiver.xsd and genericbatch<version>.xsd
  *
- * In addition, there are more pragmatic restrictions according to how things are working today
+ * In addition, there are additional pragmatic restrictions according to how things are working today
  *  - Assuming only one DataBatch/DataUnits/DataUnit - ref genericbatch with multiple
  *  - Assuming only one Attachments/Attachment - ref genericbatch with multiple
  *
@@ -40,17 +40,17 @@ class XMLExtractor(xmlFile: String) {
     private val xRDBatch: XMLStreamReader = XMLInputFactory
             .newFactory().createXMLStreamReader(StringReader(xmlFile))
 
-    // type of xml tag
+    // different types of XML elements to find
     private enum class XType { ELEM, CDATA, ATTACH}
 
-    // due to sax parsing, the elements to extract MUST BE IN ORDER
+    // due to sax parsing, the elements to extract !!MUST BE IN ORDER!!
     val serviceCode = getElem<String>(xRDBatch,"ServiceCode", XType.ELEM)
     val reference = getElem<String>(xRDBatch,"Reference", XType.ELEM)
     val formData: String
 
-    // NB!! Slight difference between Altinn messages and NAV message (re/mis use of Altinn interface)
+    // NB!! Slight difference between Altinn messages and NAV message
     // FormData ending from Altinn messages - </ns4:melding>]]]]>><![CDATA[]]<![CDATA[>
-    // FormData ending for NavOppfPlan - &lt;/OppfolgingsplanMetadata&gt;</FormData>
+    // FormData ending for NavOppfPlan - &lt;/OppfolgingsplanMetadata&gt;</FormData> (reuse/misuse of Altinnn interface)
 
     init {
         formData = when(serviceCode) {
@@ -85,6 +85,7 @@ class XMLExtractor(xmlFile: String) {
         }
     }
 
+    // Attachment is a data class for hosting a couple of attributes and file content of attachment in Altinn message
     data class Attachment(
             val archiveReference: String = "",
             val fileName: String = "",
@@ -126,7 +127,17 @@ class XMLExtractor(xmlFile: String) {
         xRFData.close()
     }
 
-    // Accepting unchecked type casting for INTERNAL function
+    /**
+     * getElem is a private generic function extracting values from XML
+     * @param T is the type of data to return. Either string (element value or CDATA) or Attachment
+     * @param xr is the XMLStreamReader
+     * @param name is the name of the tag to find
+     * @param notFound is the value of type T to return if the tag is not found
+     * @param found is a lambda function returning the data if tag is found
+     * @return returning data of type T
+     *
+     * Accepting unchecked type casting due to full control internally
+     */
 
     private fun <T>getElem(
             xr: XMLStreamReader,
@@ -136,6 +147,15 @@ class XMLExtractor(xmlFile: String) {
             @Suppress("UNCHECKED_CAST") found: (r: XMLStreamReader) -> T = { r -> r.text as T }
     ): T =
         try {
+
+            /**
+             * iterElem is a tail recursive function
+             * @return data of type T
+             *
+             * Just cruising downwards in the XMLStream (xr)
+             * - look for the tag name, then apply the found function
+             * - otherwise return notFounc
+             */
             tailrec fun iterElem(): T =
 
                     if (!xr.hasNext())
@@ -159,6 +179,7 @@ class XMLExtractor(xmlFile: String) {
                             iterElem()
                     }
 
+            // invoke the function
             iterElem()
         }
         catch (e: Exception) {

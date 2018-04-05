@@ -9,12 +9,12 @@ import java.io.File
 object D {
     val kPData = mutableMapOf<KafkaEvents, List<Any>>().apply {
 
-        this[KafkaEvents.STRING] = (1..100).map { "data-$it" }
-        this[KafkaEvents.INT] = (1..100).map { it }
+        this[KafkaEvents.STRING] = (1..10).map { "data-$it" }
+        this[KafkaEvents.INT] = (1..10).map { it }
 
         val schema = Schema.Parser().parse(File("src/main/resources/external_attachment.avsc"))
 
-        this[KafkaEvents.AVRO] = (1..100).map {
+        this[KafkaEvents.AVRO] = (1..10).map {
             GenericData.Record(schema).apply {
                 put("batch", "batch-$it")
                 put("sc", "sc-$it")
@@ -23,7 +23,7 @@ object D {
             }
         }
 
-        this[KafkaEvents.MUSIC] = (1..100).map {
+        this[KafkaEvents.MUSIC] = (1..10).map {
             GenericData.Record(schema).apply {
                 put("batch", getFileAsString("src/test/resources/musicCatalog.xml"))
                 put("sc", "TESTONLY")
@@ -34,7 +34,7 @@ object D {
 
         val dataOppf = mutableListOf<GenericRecord>()
 
-        (1..25).forEach {
+        (1..3).forEach {
             dataOppf.add(GenericData.Record(schema).apply {
                 put("batch", getFileAsString("src/test/resources/oppfolging_2913_02.xml"))
                 put("sc", "2913")
@@ -66,7 +66,7 @@ object D {
 
         this[KafkaEvents.OPPFOLGINGSPLAN] = dataOppf
 
-        this[KafkaEvents.BANKKONTONR] = (1..100).map {
+        this[KafkaEvents.BANKKONTONR] = (1..10).map {
             GenericData.Record(schema).apply {
                 put("batch", getFileAsString("src/test/resources/bankkontonummer_2896_87.xml"))
                 put("sc", "2896")
@@ -75,7 +75,7 @@ object D {
             }
         }
 
-        this[KafkaEvents.MAALEKORT] = (1..100).map {
+        this[KafkaEvents.MAALEKORT] = (1..10).map {
             GenericData.Record(schema).apply {
                 put("batch", getFileAsString("src/test/resources/maalekort_4711_01.xml"))
                 put("sc", "4711")
@@ -84,7 +84,7 @@ object D {
             }
         }
 
-        this[KafkaEvents.BARNEHAGELISTE] = (1..100).map{
+        this[KafkaEvents.BARNEHAGELISTE] = (1..10).map{
             GenericData.Record(schema).apply {
                 put("batch", getFileAsString("src/test/resources/barnehageliste_4795_01.xml"))
                 put("sc", "4795")

@@ -11,8 +11,7 @@
     
     <!--
         This stylesheet is based on parameters
-        A lot eaiser to handle the details in kotlin 
-        versus xsl. 
+        A lot eaiser to handle the details in kotlin versus xsl.
         Continueous delivery makes code changes a lot easier...
         
         This xsl replace the following set of XSL`s from 'old' Altinnkanal

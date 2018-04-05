@@ -4,6 +4,11 @@ import org.apache.avro.generic.GenericRecord
 import kotlin.reflect.KType
 import kotlin.reflect.full.starProjectedType
 
+/**
+ * A couple of functions for setting the correct deserialize or serialize values in properties by use
+ * of reflection
+ */
+
 fun getKafkaDeserializer(type: KType) = when (type) {
     String::class.starProjectedType -> "org.apache.kafka.common.serialization.StringDeserializer"
     Int::class.starProjectedType -> "org.apache.kafka.common.serialization.IntegerDeserializer"

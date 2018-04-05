@@ -3,13 +3,17 @@
 package no.nav.integrasjon.test
 
 import kotlinx.coroutines.experimental.*
+import kotlinx.coroutines.experimental.channels.Channel
+import kotlinx.coroutines.experimental.channels.SendChannel
 import no.nav.common.KafkaEnvironment
+import no.nav.integrasjon.JMSMetric
 import no.nav.integrasjon.jms.JMSProperties
 import no.nav.integrasjon.jms.JMSTextMessageWriter
 import no.nav.integrasjon.kafka.KafkaClientProperties
 import no.nav.integrasjon.kafka.KafkaEvents
 import no.nav.integrasjon.kafka.KafkaTopicConsumer
-import no.nav.integrasjon.manager.ManagePipeline
+import no.nav.integrasjon.Problem
+import no.nav.integrasjon.Status
 import no.nav.integrasjon.test.utils.D.kPData
 import no.nav.integrasjon.test.utils.EmbeddedActiveMQ
 import no.nav.integrasjon.test.utils.KafkaTopicProducer
@@ -26,8 +30,12 @@ import java.util.*
 import javax.jms.Session
 import javax.jms.TextMessage
 
+/**
+ * For completeness, this object do a few more tests in the beginning, before
+ * focusing on test of the relevant class. See function produceToJMSMP for details
+ */
+object ExternalAttachmentToJMSSpec : Spek({
 
-object ManagePipelineSpec : Spek({
 
     // create the topics to be created in kafka env
     val topics = KafkaEvents.values().map { KafkaTopicConsumer.event2Topic(it) }
@@ -57,7 +65,9 @@ object ManagePipelineSpec : Spek({
             ""
     )
 
-    class TrfString : JMSTextMessageWriter<String>(jmsDetails) {
+    class TrfString(
+            status: SendChannel<Status>,
+            jmsMetric: SendChannel<JMSMetric>) : JMSTextMessageWriter<String>(jmsDetails, status, jmsMetric) {
         override fun transform(session: Session, event: String): Result =
                 Result(
                         status = true,
@@ -65,7 +75,9 @@ object ManagePipelineSpec : Spek({
                 )
     }
 
-    class TrfInt : JMSTextMessageWriter<Int>(jmsDetails) {
+    class TrfInt(
+            status: SendChannel<Status>,
+            jmsMetric: SendChannel<JMSMetric>) : JMSTextMessageWriter<Int>(jmsDetails, status, jmsMetric) {
         override fun transform(session: Session, event: Int): Result =
                 Result(
                         status = true,
@@ -73,7 +85,9 @@ object ManagePipelineSpec : Spek({
                 )
     }
 
-    class TrfAvro : JMSTextMessageWriter<GenericRecord>(jmsDetails) {
+    class TrfAvro(
+            status: SendChannel<Status>,
+            jmsMetric: SendChannel<JMSMetric>) : JMSTextMessageWriter<GenericRecord>(jmsDetails, status, jmsMetric) {
         override fun transform(session: Session, event: GenericRecord): Result =
                 Result(
                         status = true,
@@ -85,7 +99,6 @@ object ManagePipelineSpec : Spek({
     val waitPatience = 100L
     val patienceLimit = 7_000L
 
-
     describe("Kafka topic listener transforming events to jms backend tests") {
 
         beforeGroup {
@@ -96,30 +109,37 @@ object ManagePipelineSpec : Spek({
 
             it("should receive ${kPData[KafkaEvents.STRING]!!.size} string elements, transformed to uppercase") {
 
-                val data = kPData[KafkaEvents.STRING]!! as List<String>
+                val ke = KafkaEvents.STRING
+                val data = kPData[ke]!! as List<String>
+                val cliProps = kCPPType[ke]!!
 
-                val manager = ManagePipeline.init<String,String>(
-                        kCPPType[KafkaEvents.STRING]!!, TrfString()).manageAsync()
-                val producer = KafkaTopicProducer.init<String,String>(
-                        kCPPType[KafkaEvents.STRING]!!, "key").produceAsync(data)
+                val producer = KafkaTopicProducer.init<String,String>(cliProps, "key").produceAsync(data)
+                val status = Channel<Status>()
+                val jmsMetric = Channel<JMSMetric>(50)
 
-                // helper object to get jms queue size
-
+                val result = mutableListOf<String>()
 
                 runBlocking {
+                    TrfString(status, jmsMetric).use { jms ->
 
-                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                        if (status.receive() == Problem) return@use
 
-                        withTimeoutOrNull(patienceLimit) {
-                            while (eMQ.queue.size < data.size && manager.isActive) delay(waitPatience)
+                        KafkaTopicConsumer.init<String, String>(cliProps, jms.data, status).use {
+
+                            EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+
+                                withTimeoutOrNull(patienceLimit) {
+                                    while (eMQ.queue.size < data.size) delay(waitPatience)
+                                }
+                                producer.cancelAndJoin()
+
+                                eMQ.queue.forEach { result.add((it as TextMessage).text) }
+                            }
                         }
-
-                        producer.cancelAndJoin()
-                        manager.cancelAndJoin()
-
-                        eMQ.queue.map { (it as TextMessage).text }
                     }
-                } shouldContainAll data.map { it.toUpperCase() }
+                }
+
+                result shouldContainAll data.map { it.toUpperCase() }
             }
         }
 
@@ -127,26 +147,37 @@ object ManagePipelineSpec : Spek({
 
             it("should receive ${kPData[KafkaEvents.INT]!!.size} integer elements, transformed to square") {
 
-                val data = kPData[KafkaEvents.INT]!! as List<Int>
+                val ke = KafkaEvents.INT
+                val data = kPData[ke]!! as List<Int>
+                val cliProps = kCPPType[ke]!!
 
-                val manager = ManagePipeline.init<String,Int>(kCPPType[KafkaEvents.INT]!!, TrfInt()).manageAsync()
-                val producer = KafkaTopicProducer.init<String,Int>(
-                        kCPPType[KafkaEvents.INT]!!, "key").produceAsync(data)
+                val producer = KafkaTopicProducer.init<String,Int>(cliProps, "key").produceAsync(data)
+                val status = Channel<Status>()
+                val jmsMetric = Channel<JMSMetric>(50)
+
+                val result = mutableListOf<Int>()
 
                 runBlocking {
+                    TrfInt(status, jmsMetric).use { jms ->
 
-                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                        if (status.receive() == Problem) return@use
 
-                        withTimeoutOrNull(patienceLimit) {
-                            while (eMQ.queue.size < data.size && manager.isActive) delay(waitPatience)
+                        KafkaTopicConsumer.init<String, Int>(cliProps, jms.data, status).use {
+
+                            EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+
+                                withTimeoutOrNull(patienceLimit) {
+                                    while (eMQ.queue.size < data.size) delay(waitPatience)
+                                }
+                                producer.cancelAndJoin()
+
+                                eMQ.queue.forEach { result.add((it as TextMessage).text.toInt()) }
+                            }
                         }
-
-                        producer.cancelAndJoin()
-                        manager.cancelAndJoin()
-
-                        eMQ.queue.map { (it as TextMessage).text.toInt() }
                     }
-                } shouldContainAll data.map { it * it }
+                }
+
+                result shouldContainAll data.map { it * it }
             }
         }
 
@@ -154,28 +185,37 @@ object ManagePipelineSpec : Spek({
 
             it("should receive ${kPData[KafkaEvents.AVRO]!!.size} avro elements, transformed to toString") {
 
-                val data = kPData[KafkaEvents.AVRO]!! as List<GenericRecord>
+                val ke = KafkaEvents.AVRO
+                val data = kPData[ke]!! as List<GenericRecord>
+                val cliProps = kCPPType[ke]!!
 
-                val manager = ManagePipeline.init<String,GenericRecord>(
-                        kCPPType[KafkaEvents.AVRO]!!, TrfAvro()).manageAsync()
-                val producer = KafkaTopicProducer.init<String,GenericRecord>(
-                        kCPPType[KafkaEvents.AVRO]!!,
-                        "key").produceAsync(data)
+                val producer = KafkaTopicProducer.init<String,GenericRecord>(cliProps, "key").produceAsync(data)
+                val status = Channel<Status>()
+                val jmsMetric = Channel<JMSMetric>(50)
+
+                val result = mutableListOf<String>()
 
                 runBlocking {
+                    TrfAvro(status, jmsMetric).use { jms ->
 
-                    EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+                        if (status.receive() == Problem) return@use
 
-                        withTimeoutOrNull(patienceLimit) {
-                            while (eMQ.queue.size < data.size && manager.isActive) delay(waitPatience)
+                        KafkaTopicConsumer.init<String, GenericRecord>(cliProps, jms.data, status).use {
+
+                            EmbeddedActiveMQ(jmsDetails).use { eMQ ->
+
+                                withTimeoutOrNull(patienceLimit) {
+                                    while (eMQ.queue.size < data.size) delay(waitPatience)
+                                }
+                                producer.cancelAndJoin()
+
+                                eMQ.queue.forEach { result.add((it as TextMessage).text) }
+                            }
                         }
-
-                        producer.cancelAndJoin()
-                        manager.cancelAndJoin()
-
-                        eMQ.queue.map { (it as TextMessage).text }
                     }
-                } shouldContainAll data.map { it.toString()  }
+                }
+
+                result shouldContainAll data.map { it.toString() }
             }
         }
 
