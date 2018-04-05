@@ -19,8 +19,8 @@ plugins{
     id 'maven-publish'
 }
 
-group 'torstein.nesby'
-version '1.0-SNAPSHOT'
+group 'no.nav.integrasjon'
+version '1.0'
 
 //mainClassName = 'main.kt'
 
@@ -61,8 +61,6 @@ dependencies {
     implementation "io.prometheus:simpleclient_common:$prometheus_version"
     implementation files("src/libs/saxon9he.jar")
 
-    //testImplementation "org.apache.activemq:artemis-jms-client-all:$active_mq_version"
-    //testImplementation "org.apache.activemq:artemis-jms-server:$active_mq_version"
     testImplementation "org.amshove.kluent:kluent:1.33"
     testCompile "org.jetbrains.spek:spek-api:1.1.5"
     testImplementation "no.nav.common:embedded.kafka:$embeddedkafka_version"
